@@ -1,0 +1,21 @@
+{
+  "name": "careloop",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @careloop/web --filter @careloop/api dev",
+    "dev:web": "pnpm --filter @careloop/web dev",
+    "dev:api": "pnpm --filter @careloop/api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "demo:seed": "python scripts/seed-demo-data.py",
+    "demo:reset": "python scripts/reset-demo.py"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  }
+}

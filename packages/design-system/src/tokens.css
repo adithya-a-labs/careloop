@@ -1,0 +1,22 @@
+:root {
+  --care-cream: #ffedb9;
+  --care-sun: #ffcb56;
+  --care-peach: #ffa259;
+  --care-coral: #ff7e7e;
+  --care-canvas: #fffaf0;
+  --care-surface: #fffdf8;
+  --care-ink: #3d302b;
+  --care-muted: #74655f;
+  --care-border: #eadfce;
+  --care-success: #5f8f72;
+  --care-shadow: 0 14px 38px rgba(99, 65, 40, 0.1);
+  --care-radius-sm: 12px;
+  --care-radius-md: 20px;
+  --care-radius-lg: 30px;
+  --care-font: Inter, ui-rounded, "Nunito Sans", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--care-ink); background: var(--care-canvas); font-family: var(--care-font); }
+button, input, select, textarea { font: inherit; }
+:focus-visible { outline: 3px solid var(--care-peach); outline-offset: 3px; }
