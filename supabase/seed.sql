@@ -2,17 +2,69 @@
 -- Do not reuse these credentials or records outside local/demo environments.
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password,
-  email_confirmed_at, created_at, updated_at
+  email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change,
+  email_change_token_new, email_change_token_current,
+  phone_change, phone_change_token, reauthentication_token,
+  is_super_admin, last_sign_in_at,
+  created_at, updated_at
 )
 values
-  ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'amma@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), now(), now()),
-  ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'maya@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), now(), now()),
-  ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'rahul@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), now(), now()),
-  ('10000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'anu@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), now(), now())
+  ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'amma@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, '', '', '', '', '', '', '', '', false, now(), now(), now()),
+  ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'maya@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, '', '', '', '', '', '', '', '', false, now(), now(), now()),
+  ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'rahul@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, '', '', '', '', '', '', '', '', false, now(), now(), now()),
+  ('10000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'anu@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, '', '', '', '', '', '', '', '', false, now(), now(), now())
 on conflict (id) do update set
   email = excluded.email,
   encrypted_password = excluded.encrypted_password,
   email_confirmed_at = excluded.email_confirmed_at,
+  raw_app_meta_data = excluded.raw_app_meta_data,
+  raw_user_meta_data = excluded.raw_user_meta_data,
+  confirmation_token = excluded.confirmation_token,
+  recovery_token = excluded.recovery_token,
+  email_change = excluded.email_change,
+  email_change_token_new = excluded.email_change_token_new,
+  email_change_token_current = excluded.email_change_token_current,
+  phone_change = excluded.phone_change,
+  phone_change_token = excluded.phone_change_token,
+  reauthentication_token = excluded.reauthentication_token,
+  is_super_admin = excluded.is_super_admin,
+  last_sign_in_at = excluded.last_sign_in_at,
+  updated_at = excluded.updated_at;
+
+update auth.identities
+set provider_id = user_id::text, updated_at = now()
+where user_id in (
+  '10000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000003',
+  '10000000-0000-0000-0000-000000000004'
+);
+
+insert into auth.identities (
+  provider_id, user_id, identity_data, provider, created_at, updated_at
+)
+select
+  id::text,
+  id,
+  jsonb_build_object(
+    'sub', id::text,
+    'email', email,
+    'email_verified', true,
+    'phone_verified', false
+  ),
+  'email',
+  now(),
+  now()
+from auth.users
+where id in (
+  '10000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000003',
+  '10000000-0000-0000-0000-000000000004'
+)
+on conflict (provider_id, provider) do update set
+  identity_data = excluded.identity_data,
   updated_at = excluded.updated_at;
 
 insert into public.profiles (id, display_name, age_range, preferred_language, preferences)

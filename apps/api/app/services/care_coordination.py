@@ -249,9 +249,9 @@ class CareCoordinationService:
         return self._supabase
 
     def resolve_actor(self, authorization: str | None) -> str:
+        if settings.demo_mode:
+            return DEMO_MAYA_ID
         if not authorization:
-            if settings.demo_mode:
-                return DEMO_MAYA_ID
             raise UnauthorizedError()
 
         scheme, _, token = authorization.partition(" ")
@@ -325,6 +325,11 @@ class CareCoordinationService:
                 "member_required",
                 "The referenced person must be an active member of this Care Circle.",
             )
+
+    def assert_voice_context(self, circle_id: str, actor_id: str, patient_id: str) -> None:
+        """Authorize both the speaker and care subject before provider session creation."""
+        self._assert_member(circle_id, actor_id)
+        self._assert_person_in_circle(circle_id, patient_id)
 
     def get_circle(self, circle_id: UUID, actor_id: str) -> dict[str, Any]:
         circle = str(circle_id)
@@ -447,7 +452,11 @@ class CareCoordinationService:
     ) -> dict[str, Any]:
         circle = str(circle_id)
         self._assert_member(circle, actor_id)
-        reporter = str(payload.reported_by) if payload.reported_by else actor_id
+        reporter = (
+            actor_id
+            if self.uses_supabase
+            else str(payload.reported_by) if payload.reported_by else actor_id
+        )
         self._assert_person_in_circle(circle, reporter)
         self._assert_person_in_circle(circle, str(payload.subject_id))
 
@@ -467,7 +476,22 @@ class CareCoordinationService:
             rows = self._execute(self._client().table("care_events").insert(row))
             if not rows:
                 raise BackendUnavailableError()
-            return rows[0]
+            return {
+                key: rows[0].get(key)
+                for key in (
+                    "id",
+                    "circle_id",
+                    "subject_id",
+                    "reported_by",
+                    "event_type",
+                    "event_data",
+                    "source",
+                    "raw_transcript",
+                    "confidence",
+                    "occurred_at",
+                    "created_at",
+                )
+            }
         now = _iso(_utc_now())
         created = {"id": str(uuid4()), **row, "created_at": now}
         with self._lock:

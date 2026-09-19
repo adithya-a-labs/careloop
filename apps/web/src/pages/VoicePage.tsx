@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, type TargetAndTransition } from 'framer-motion';
 import { Mic, Check, Loader2, Volume2, X, ArrowLeft, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createCareEvent, extractVoiceEvents } from '../lib/api';
+import { useDemoProfile } from '../features/demo/DemoContext';
+import { startLiveVoice, type LiveVoiceConnection } from '../lib/live-voice';
 import { VOICE_TRANSCRIPT_MOCK } from '../lib/mock-data';
+import { isRealMode } from '../lib/supabase';
 
 export type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'success';
 
@@ -22,29 +25,31 @@ const DEMO_BUTTONS: DemoButton[] = [
 
 export function VoicePage() {
   const navigate = useNavigate();
+  const { activeProfile } = useDemoProfile();
   const [state, setState] = useState<VoiceState>('idle');
   const [isProcessing, setIsProcessing] = useState(false);
   const [savedEventCount, setSavedEventCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState(VOICE_TRANSCRIPT_MOCK);
+  const liveConnection = useRef<LiveVoiceConnection | null>(null);
 
-  const runHeroFlow = async () => {
-    if (isProcessing) return;
+  useEffect(() => () => liveConnection.current?.close(), []);
+
+  const persistTranscript = async (value: string) => {
     setIsProcessing(true);
     setErrorMessage(null);
     setSavedEventCount(0);
-    setState('listening');
-
     try {
-      await new Promise((resolve) => setTimeout(resolve, 900));
       setState('thinking');
-      const extraction = await extractVoiceEvents(VOICE_TRANSCRIPT_MOCK);
+      const extraction = await extractVoiceEvents(value, activeProfile);
       if (extraction.events.length === 0) {
         throw new Error('No care updates were found in this transcript.');
       }
 
       setState('speaking');
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      await Promise.all(extraction.events.map(createCareEvent));
+      await Promise.all(
+        extraction.events.map((event) => createCareEvent(event, activeProfile.id)),
+      );
       setSavedEventCount(extraction.events.length);
       setState('success');
     } catch (error) {
@@ -57,10 +62,56 @@ export function VoicePage() {
     }
   };
 
+  const runDemoFlow = async (reason?: string) => {
+    setTranscript(VOICE_TRANSCRIPT_MOCK);
+    setState('listening');
+    if (reason) setErrorMessage(`${reason} Using the demo transcript instead.`);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await persistTranscript(VOICE_TRANSCRIPT_MOCK);
+  };
+
+  const startHeroFlow = async () => {
+    if (isProcessing || liveConnection.current) return;
+    setErrorMessage(null);
+    setSavedEventCount(0);
+    setTranscript('');
+    setState('listening');
+    if (!isRealMode) {
+      await runDemoFlow();
+      return;
+    }
+    try {
+      liveConnection.current = await startLiveVoice(activeProfile, {
+        onConnected: () => setState('listening'),
+        onInputTranscript: setTranscript,
+        onSpeaking: () => setState('speaking'),
+        onError: setErrorMessage,
+      });
+    } catch (error) {
+      await runDemoFlow(error instanceof Error ? error.message : 'Live voice could not start.');
+    }
+  };
+
+  const finishLiveFlow = async () => {
+    const connection = liveConnection.current;
+    if (!connection) return;
+    liveConnection.current = null;
+    const completedTranscript = connection.transcript();
+    connection.close();
+    if (!completedTranscript) {
+      await runDemoFlow('No live transcript was received.');
+      return;
+    }
+    setTranscript(completedTranscript);
+    await persistTranscript(completedTranscript);
+  };
+
   // Orb click handling
   const handleOrbClick = () => {
     if (state === 'idle') {
-      void runHeroFlow();
+      void startHeroFlow();
+    } else if (liveConnection.current && (state === 'listening' || state === 'speaking')) {
+      void finishLiveFlow();
     } else if (state === 'success') {
       setState('idle');
       setSavedEventCount(0);
@@ -70,7 +121,7 @@ export function VoicePage() {
   // Demo controls override everything
   const handleDemoSelect = (selectedState: VoiceState) => {
     if (selectedState === 'listening' || selectedState === 'success') {
-      void runHeroFlow();
+      void runDemoFlow();
       return;
     }
     setErrorMessage(null);
@@ -179,6 +230,8 @@ export function VoicePage() {
         <button
           type="button"
           onClick={() => {
+            liveConnection.current?.close();
+            liveConnection.current = null;
             setState('idle');
             setErrorMessage(null);
             setSavedEventCount(0);
@@ -261,7 +314,8 @@ export function VoicePage() {
           >
             <span>
               {state === 'idle' && 'Tap to start talking'}
-              {state === 'listening' && "I'm listening..."}
+              {state === 'listening' &&
+                (liveConnection.current ? 'Listening — tap when finished' : "I'm listening...")}
               {state === 'thinking' && 'Understanding...'}
               {state === 'speaking' && "Here's what I heard"}
               {state === 'success' && `${savedEventCount} updates added to your Care Circle`}
@@ -291,7 +345,7 @@ export function VoicePage() {
               {state === 'speaking' ? 'Transcribing...' : 'Care circle update'}
             </div>
             <blockquote className="voice-transcript-quote">
-              “{VOICE_TRANSCRIPT_MOCK}”
+              “{transcript || 'Listening for your update…'}”
             </blockquote>
             {state === 'success' && (
               <motion.div

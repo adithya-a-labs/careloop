@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.care import CareEventCreate, TaskCreate
 
@@ -9,7 +9,11 @@ class Message(BaseModel):
     message: str
 
 
-class VoiceTurn(BaseModel):
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class VoiceTurn(StrictModel):
     circle_id: str
     transcript: str = Field(min_length=1, max_length=8000)
     speaker_id: str | None = None
@@ -20,45 +24,71 @@ class VoiceTurn(BaseModel):
     preferred_language: str | None = None
 
 
+class LiveSessionCreate(StrictModel):
+    sdp: str = Field(min_length=1, max_length=100_000)
+    user_id: str
+    circle_id: str
+    speaker_id: str
+    patient_id: str
+    role: str
+    relationship: str
+    patient_name: str
+    preferred_language: str
+
+
+class LiveTransport(StrictModel):
+    type: Literal["webrtc"]
+    sdp: str
+
+
+class LiveSessionReference(StrictModel):
+    id: str
+
+
+class LiveSessionResponse(StrictModel):
+    session: LiveSessionReference
+    transport: LiveTransport
+
+
 class ToolResult(BaseModel):
     tool: str
     status: str = "draft"
     preview: dict[str, object]
     requires_confirmation: bool = True
 
-class SleepData(BaseModel):
+class SleepData(StrictModel):
     quality: Literal["good", "fair", "poor"]
     duration_hours: float | None = None
 
-class MealData(BaseModel):
+class MealData(StrictModel):
     meal: Literal["breakfast", "lunch", "dinner", "snack"]
     intake: Literal["normal", "low", "none"]
 
-class MoodData(BaseModel):
+class MoodData(StrictModel):
     valence: Literal["positive", "neutral", "negative"]
     note: str | None = None
 
-class MedicationData(BaseModel):
+class MedicationData(StrictModel):
     name: str
     taken: bool
     note: str | None = None
 
-class ActivityData(BaseModel):
+class ActivityData(StrictModel):
     type: str
     duration_minutes: int | None = None
     note: str | None = None
 
-class SymptomData(BaseModel):
+class SymptomData(StrictModel):
     name: str
     severity: Literal["mild", "moderate", "severe"]
     note: str | None = None
 
-class AppointmentData(BaseModel):
+class AppointmentData(StrictModel):
     type: str
     scheduled_for: str | None = None
     note: str | None = None
 
-class NoteData(BaseModel):
+class NoteData(StrictModel):
     content: str
 
 EventData = (
@@ -72,7 +102,7 @@ EventData = (
     | NoteData
 )
 
-class ExtractedCareEvent(BaseModel):
+class ExtractedCareEvent(StrictModel):
     type: Literal["sleep", "meal", "mood", "medication", "activity", "symptom", "appointment", "note"]
     data: EventData
     subject_id: str
@@ -81,7 +111,7 @@ class ExtractedCareEvent(BaseModel):
     raw_transcript: str
     confidence: float = Field(ge=0.0, le=1.0)
 
-class CareEventExtractionResult(BaseModel):
+class CareEventExtractionResult(StrictModel):
     events: list[ExtractedCareEvent]
 
 
@@ -90,6 +120,8 @@ __all__ = [
     "CareEventExtractionResult",
     "ExtractedCareEvent",
     "Message",
+    "LiveSessionCreate",
+    "LiveSessionResponse",
     "TaskCreate",
     "ToolResult",
     "VoiceTurn",

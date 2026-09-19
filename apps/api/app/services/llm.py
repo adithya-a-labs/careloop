@@ -105,14 +105,15 @@ class LLMService:
         
         client = self._get_client()
         
-        completion = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
-            messages=[
+        response = client.responses.parse(
+            model="gpt-5.6-luna",
+            input=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": json.dumps(context, ensure_ascii=False)}
             ],
-            response_format=CareEventExtractionResult,
-            temperature=0.1
+            text_format=CareEventExtractionResult,
         )
-        
-        return completion.choices[0].message.parsed
+
+        if response.output_parsed is None:
+            return CareEventExtractionResult(events=[])
+        return response.output_parsed

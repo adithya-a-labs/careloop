@@ -12,6 +12,7 @@
   "dependencies": {
     "@careloop/design-system": "workspace:*",
     "@careloop/shared": "workspace:*",
+    "@supabase/supabase-js": "2.57.4",
     "@vitejs/plugin-react": "^4.3.4",
     "framer-motion": "^13.4.0",
     "lucide-react": "^0.468.0",

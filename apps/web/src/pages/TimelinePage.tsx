@@ -2,8 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { Clock } from 'lucide-react';
 import { useDemoProfile } from '../features/demo/DemoContext';
-import { listCareEvents, type CareEvent } from '../lib/api';
+import { DEMO_CIRCLE_ID, listCareEvents, type CareEvent } from '../lib/api';
 import type { TimelineEvent } from '../lib/mock-data';
+import {
+  ensureDemoSession,
+  removeRealtimeChannel,
+  subscribeToCareEvents,
+} from '../lib/supabase';
 
 const PROFILE_NAMES: Record<string, string> = {
   '10000000-0000-0000-0000-000000000001': 'Amma',
@@ -83,9 +88,19 @@ export function TimelinePage() {
     let cancelled = false;
     setIsLoading(true);
     setErrorMessage(null);
-    listCareEvents()
+    let channel: ReturnType<typeof subscribeToCareEvents> = null;
+    ensureDemoSession(activeProfile.id)
+      .then(() => listCareEvents(activeProfile.id))
       .then((careEvents) => {
-        if (!cancelled) setEvents(careEvents.map(toTimelineEvent));
+        if (cancelled) return;
+        setEvents(careEvents.map(toTimelineEvent));
+        channel = subscribeToCareEvents(DEMO_CIRCLE_ID, (row) => {
+          const inserted = row as unknown as CareEvent;
+          setEvents((current) => {
+            if (current.some((event) => event.id === inserted.id)) return current;
+            return [toTimelineEvent(inserted), ...current];
+          });
+        });
       })
       .catch(() => {
         if (!cancelled) setErrorMessage('CareLoop could not load the shared timeline.');
@@ -96,6 +111,7 @@ export function TimelinePage() {
 
     return () => {
       cancelled = true;
+      void removeRealtimeChannel(channel);
     };
   }, [activeProfile.id]);
 

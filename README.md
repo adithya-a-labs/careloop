@@ -28,7 +28,7 @@ python -m venv apps/api/.venv
 pnpm dev
 ```
 
-Web: `http://localhost:5173` · API docs: `http://localhost:8000/docs`
+Web: `http://localhost:5174` · API docs: `http://localhost:8000/docs`
 
 Configure Supabase with the project URL in both `VITE_SUPABASE_URL` and
 `SUPABASE_URL`. Use the browser-safe publishable key in
@@ -42,7 +42,11 @@ supabase start
 pnpm demo:reset
 ```
 
-The frontend works as a polished static demo before credentials are added. Route and service stubs mark integration seams without pretending external services are configured.
+Keep `DEMO_MODE=true` and `VITE_DEMO_MODE=true` for the in-memory/fixed-transcript
+fallback. Set both to `false` after adding the Supabase and OpenAI values to use
+authenticated Supabase persistence, filtered Realtime updates, GPT Live voice,
+and GPT-5.6 Luna extraction. The seeded demo profiles use synthetic local/demo
+credentials only; do not reuse them for real users.
 
 ## Development
 
