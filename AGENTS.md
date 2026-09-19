@@ -55,7 +55,7 @@ An agent owns only the area named in its task. Cross-boundary work must be expli
 
 ## Non-negotiable engineering rules
 
-- Keep privileged Supabase and LLM credentials in `apps/api`; the browser may receive only public configuration and the Supabase anonymous key.
+- Keep privileged Supabase and LLM credentials in `apps/api`; the browser may receive only public configuration and the Supabase publishable key.
 - LLMs and agents may call named, validated backend tools only. Never expose arbitrary SQL, arbitrary code execution, diagnosis, prescribing or medication mutation.
 - Mutating voice or generated actions must be previewed and explicitly confirmed.
 - Enforce care-circle membership on every circle-owned data operation, including realtime and storage access.

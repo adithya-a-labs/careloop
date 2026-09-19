@@ -30,6 +30,11 @@ pnpm dev
 
 Web: `http://localhost:5173` · API docs: `http://localhost:8000/docs`
 
+Configure Supabase with the project URL in both `VITE_SUPABASE_URL` and
+`SUPABASE_URL`. Use the browser-safe publishable key in
+`VITE_SUPABASE_PUBLISHABLE_KEY`, and keep `SUPABASE_SECRET_KEY` and
+`OPENAI_API_KEY` backend-only. Never add a secret key to a `VITE_` variable.
+
 For local data:
 
 ```bash
