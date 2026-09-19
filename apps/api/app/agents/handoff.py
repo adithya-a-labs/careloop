@@ -6,6 +6,9 @@ from typing import Any
 from app.services.llm import LLMService
 from app.schemas.common import HandoffSummary
 
+name = "handoff"
+allowed_tools = frozenset({"list_recent_events", "list_open_tasks", "draft_handoff"})
+
 _llm = LLMService()
 
 

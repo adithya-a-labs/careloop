@@ -6,6 +6,9 @@ from typing import Any
 from app.services.llm import LLMService
 from app.schemas.common import MemoryExtractionResult
 
+name = "memory"
+allowed_tools = frozenset({"save_memory", "list_memories"})
+
 _llm = LLMService()
 
 

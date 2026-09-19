@@ -9,6 +9,9 @@ from uuid import UUID
 from app.services.llm import LLMService
 from app.schemas.common import CoordinationSuggestion
 
+name = "coordination"
+allowed_tools = frozenset({"list_availability", "draft_task", "suggest_assignee"})
+
 _llm = LLMService()
 
 
