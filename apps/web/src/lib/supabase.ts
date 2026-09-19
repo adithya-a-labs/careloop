@@ -8,6 +8,8 @@ export const isRealMode = import.meta.env.VITE_DEMO_MODE === 'false';
 export const supabase =
   supabaseUrl && publishableKey ? createClient(supabaseUrl, publishableKey) : null;
 
+let sessionOperation: Promise<string | null> = Promise.resolve(null);
+
 const DEMO_EMAILS: Record<DemoProfileId, string> = {
   amma: 'amma@demo.careloop',
   maya: 'maya@demo.careloop',
@@ -15,7 +17,7 @@ const DEMO_EMAILS: Record<DemoProfileId, string> = {
   anu: 'anu@demo.careloop',
 };
 
-export async function ensureDemoSession(profileId: DemoProfileId): Promise<string | null> {
+async function establishDemoSession(profileId: DemoProfileId): Promise<string | null> {
   if (!isRealMode) return null;
   if (!supabase) throw new Error('Supabase public configuration is missing.');
 
@@ -35,6 +37,11 @@ export async function ensureDemoSession(profileId: DemoProfileId): Promise<strin
   return data.session.access_token;
 }
 
+export function ensureDemoSession(profileId: DemoProfileId): Promise<string | null> {
+  sessionOperation = sessionOperation.catch(() => null).then(() => establishDemoSession(profileId));
+  return sessionOperation;
+}
+
 export function subscribeToCareEvents(
   circleId: string,
   onInsert: (row: Record<string, unknown>) => void,
@@ -44,7 +51,12 @@ export function subscribeToCareEvents(
     .channel(`care-events:${circleId}`)
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'care_events', filter: `circle_id=eq.${circleId}` },
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'care_events',
+        filter: `circle_id=eq.${circleId}`,
+      },
       (payload) => onInsert(payload.new),
     )
     .subscribe();

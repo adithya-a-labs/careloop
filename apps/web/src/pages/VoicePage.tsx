@@ -25,7 +25,7 @@ const DEMO_BUTTONS: DemoButton[] = [
 
 export function VoicePage() {
   const navigate = useNavigate();
-  const { activeProfile } = useDemoProfile();
+  const { activeProfile, authStatus, authError } = useDemoProfile();
   const [state, setState] = useState<VoiceState>('idle');
   const [isProcessing, setIsProcessing] = useState(false);
   const [savedEventCount, setSavedEventCount] = useState(0);
@@ -47,9 +47,7 @@ export function VoicePage() {
       }
 
       setState('speaking');
-      await Promise.all(
-        extraction.events.map((event) => createCareEvent(event, activeProfile.id)),
-      );
+      await Promise.all(extraction.events.map((event) => createCareEvent(event, activeProfile.id)));
       setSavedEventCount(extraction.events.length);
       setState('success');
     } catch (error) {
@@ -72,6 +70,10 @@ export function VoicePage() {
 
   const startHeroFlow = async () => {
     if (isProcessing || liveConnection.current) return;
+    if (isRealMode && authStatus !== 'authenticated') {
+      setErrorMessage(authError ?? `CareLoop is signing in as ${activeProfile.displayName}.`);
+      return;
+    }
     setErrorMessage(null);
     setSavedEventCount(0);
     setTranscript('');
@@ -280,7 +282,8 @@ export function VoicePage() {
           className="voice-orb-button"
           aria-label={`Voice orb (${state})`}
           onClick={handleOrbClick}
-          disabled={isProcessing}
+          disabled={isProcessing || (isRealMode && authStatus !== 'authenticated')}
+          aria-busy={isRealMode && authStatus === 'loading'}
           animate={getOrbAnimation(state)}
           style={{
             boxShadow: getOrbGlow(state),
@@ -313,7 +316,12 @@ export function VoicePage() {
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
             <span>
-              {state === 'idle' && 'Tap to start talking'}
+              {state === 'idle' &&
+                (isRealMode && authStatus === 'loading'
+                  ? `Signing in as ${activeProfile.displayName}…`
+                  : isRealMode && authStatus === 'failed'
+                    ? 'Sign-in required before talking'
+                    : 'Tap to start talking')}
               {state === 'listening' &&
                 (liveConnection.current ? 'Listening — tap when finished' : "I'm listening...")}
               {state === 'thinking' && 'Understanding...'}
@@ -328,6 +336,11 @@ export function VoicePage() {
       {errorMessage && (
         <p className="form-error" role="alert">
           {errorMessage}
+        </p>
+      )}
+      {!errorMessage && isRealMode && authStatus === 'failed' && authError && (
+        <p className="form-error" role="alert">
+          {authError}
         </p>
       )}
 
@@ -353,9 +366,27 @@ export function VoicePage() {
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15, duration: 0.25 }}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '0.75rem', width: '100%', maxWidth: '340px', margin: '0.8rem auto 0' }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'stretch',
+                  gap: '0.75rem',
+                  width: '100%',
+                  maxWidth: '340px',
+                  margin: '0.8rem auto 0',
+                }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', color: 'var(--care-success)', fontWeight: 750, fontSize: '0.9rem' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                    color: 'var(--care-success)',
+                    fontWeight: 750,
+                    fontSize: '0.9rem',
+                  }}
+                >
                   <Check size={18} strokeWidth={2.5} />
                   <span>Captured to shared timeline</span>
                 </div>
@@ -404,7 +435,9 @@ export function VoicePage() {
       {/* 6. Safety Notice */}
       <div className="voice-safety">
         <ShieldCheck size={20} />
-        <p>CareLoop coordinates and summarizes. It does not diagnose, prescribe, or alter medication.</p>
+        <p>
+          CareLoop coordinates and summarizes. It does not diagnose, prescribe, or alter medication.
+        </p>
       </div>
     </div>
   );

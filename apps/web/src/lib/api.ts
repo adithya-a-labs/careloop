@@ -1,5 +1,5 @@
 import type { DemoProfile, DemoProfileId } from './mock-data';
-import { ensureDemoSession } from './supabase';
+import { ensureDemoSession, isRealMode } from './supabase';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -37,8 +37,15 @@ export interface CareEvent {
   created_at: string;
 }
 
-export async function api<T>(path: string, init?: RequestInit, profileId: DemoProfileId = 'maya'): Promise<T> {
+export async function api<T>(
+  path: string,
+  init?: RequestInit,
+  profileId: DemoProfileId = 'maya',
+): Promise<T> {
   const accessToken = await ensureDemoSession(profileId);
+  if (isRealMode && !accessToken) {
+    throw new Error('CareLoop authentication is not ready. Please try again.');
+  }
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
@@ -66,28 +73,36 @@ export function voiceContext(profile: DemoProfile) {
 
 export function extractVoiceEvents(transcript: string, profile: DemoProfile) {
   const context = voiceContext(profile);
-  return api<{ events: ExtractedCareEvent[] }>('/api/v1/voice/extract', {
-    method: 'POST',
-    body: JSON.stringify({
-      transcript,
-      ...context,
-    }),
-  }, profile.id);
+  return api<{ events: ExtractedCareEvent[] }>(
+    '/api/v1/voice/extract',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        transcript,
+        ...context,
+      }),
+    },
+    profile.id,
+  );
 }
 
 export function createCareEvent(event: ExtractedCareEvent, profileId: DemoProfileId) {
-  return api<CareEvent>(`/api/v1/circles/${DEMO_CIRCLE_ID}/events`, {
-    method: 'POST',
-    body: JSON.stringify({
-      event_type: event.type,
-      event_data: event.data,
-      subject_id: event.subject_id,
-      reported_by: event.reported_by,
-      source: event.source,
-      raw_transcript: event.raw_transcript,
-      confidence: event.confidence,
-    }),
-  }, profileId);
+  return api<CareEvent>(
+    `/api/v1/circles/${DEMO_CIRCLE_ID}/events`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        event_type: event.type,
+        event_data: event.data,
+        subject_id: event.subject_id,
+        reported_by: event.reported_by,
+        source: event.source,
+        raw_transcript: event.raw_transcript,
+        confidence: event.confidence,
+      }),
+    },
+    profileId,
+  );
 }
 
 export function listCareEvents(profileId: DemoProfileId) {
@@ -100,12 +115,16 @@ export interface LiveSessionResponse {
 }
 
 export function createLiveSession(sdp: string, profile: DemoProfile) {
-  return api<LiveSessionResponse>('/api/v1/voice/session', {
-    method: 'POST',
-    body: JSON.stringify({
-      sdp,
-      user_id: PROFILE_UUIDS[profile.id],
-      ...voiceContext(profile),
-    }),
-  }, profile.id);
+  return api<LiveSessionResponse>(
+    '/api/v1/voice/session',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        sdp,
+        user_id: PROFILE_UUIDS[profile.id],
+        ...voiceContext(profile),
+      }),
+    },
+    profile.id,
+  );
 }
