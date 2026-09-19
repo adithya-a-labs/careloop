@@ -4,13 +4,14 @@ import type { DemoProfileId } from './mock-data';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export const isRealMode = import.meta.env.VITE_DEMO_MODE === 'false';
+// Enable real mode whenever Supabase credentials are provided
+export const isRealMode = Boolean(supabaseUrl && publishableKey);
 export const supabase =
   supabaseUrl && publishableKey ? createClient(supabaseUrl, publishableKey) : null;
 
 let sessionOperation: Promise<string | null> = Promise.resolve(null);
 
-const DEMO_EMAILS: Record<DemoProfileId, string> = {
+export const DEMO_EMAILS: Record<DemoProfileId, string> = {
   amma: 'amma@demo.careloop',
   maya: 'maya@demo.careloop',
   rahul: 'rahul@demo.careloop',
@@ -32,7 +33,7 @@ async function establishDemoSession(profileId: DemoProfileId): Promise<string | 
     email: expectedEmail,
     password: 'careloop-demo',
   });
-  if (error || !data.session) throw new Error('The demo profile could not sign in.');
+  if (error || !data.session) throw new Error(`The demo profile ${profileId} could not sign in: ${error?.message}`);
   supabase.realtime.setAuth(data.session.access_token);
   return data.session.access_token;
 }
@@ -48,7 +49,7 @@ export function subscribeToCareEvents(
 ): RealtimeChannel | null {
   if (!isRealMode || !supabase) return null;
   return supabase
-    .channel(`care-events:${circleId}`)
+    .channel(`care-events:${circleId}:${Date.now()}`)
     .on(
       'postgres_changes',
       {
@@ -57,7 +58,51 @@ export function subscribeToCareEvents(
         table: 'care_events',
         filter: `circle_id=eq.${circleId}`,
       },
-      (payload) => onInsert(payload.new),
+      (payload: any) => onInsert(payload.new as Record<string, unknown>),
+    )
+    .subscribe();
+}
+
+export function subscribeToTasks(
+  circleId: string,
+  onChange: (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => void,
+): RealtimeChannel | null {
+  if (!isRealMode || !supabase) return null;
+  return supabase
+    .channel(`tasks:${circleId}:${Date.now()}`)
+    .on(
+      'postgres_changes' as any,
+      {
+        event: '*',
+        schema: 'public',
+        table: 'tasks',
+        filter: `circle_id=eq.${circleId}`,
+      },
+      (payload: any) => onChange({
+        eventType: payload.eventType,
+        new: (payload.new || {}) as Record<string, unknown>,
+        old: (payload.old || {}) as Record<string, unknown>,
+      }),
+    )
+    .subscribe();
+}
+
+export function subscribeToMemories(
+  circleId: string,
+  onInsert: (row: Record<string, unknown>) => void,
+): RealtimeChannel | null {
+  if (!isRealMode || !supabase) return null;
+  return supabase
+    .channel(`memories:${circleId}:${Date.now()}`)
+    .on(
+      'postgres_changes' as any,
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'memories',
+        filter: `circle_id=eq.${circleId}`,
+      },
+      (payload: any) => onInsert(payload.new as Record<string, unknown>),
     )
     .subscribe();
 }

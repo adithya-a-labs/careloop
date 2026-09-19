@@ -7,6 +7,7 @@ const ensureDemoSession = vi.fn();
 vi.mock('./supabase', () => ({
   ensureDemoSession,
   isRealMode: true,
+  supabase: null,
 }));
 
 describe('authenticated CareLoop API client', () => {

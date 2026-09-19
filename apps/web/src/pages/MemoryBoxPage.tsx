@@ -1,6 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import { Plus, Play, Camera, Pause, Heart, Sparkles } from 'lucide-react';
+import { Plus, Play, Camera, Pause, Heart, Sparkles, Music } from 'lucide-react';
+import { useDemoProfile } from '../features/demo/DemoContext';
+import {
+  listMemories,
+  createMemory,
+  DEMO_CIRCLE_ID,
+  DEMO_AMMA_ID,
+  type ApiMemory,
+} from '../lib/api';
+import { subscribeToMemories, removeRealtimeChannel } from '../lib/supabase';
 import { MEMORY_ITEMS, type MemoryItem } from '../lib/mock-data';
 
 type MemoryTab = 'All' | 'Stories' | 'Photos' | 'Voice';
@@ -25,13 +34,57 @@ const itemVariants: Variants = {
 };
 
 export function MemoryBoxPage() {
+  const { activeProfile } = useDemoProfile();
   const [activeTab, setActiveTab] = useState<MemoryTab>('All');
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [memories, setMemories] = useState<MemoryItem[]>(MEMORY_ITEMS);
+  const [memories, setMemories] = useState<ApiMemory[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newYear, setNewYear] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [newKind, setNewKind] = useState<'story' | 'photo' | 'voice'>('story');
+  const [loading, setLoading] = useState(true);
+
+  // Load real persisted memories
+  useEffect(() => {
+    let cancelled = false;
+    listMemories(activeProfile.id)
+      .then((data) => {
+        if (cancelled) return;
+        if (data && data.length > 0) {
+          setMemories(data);
+        } else {
+          // Fallback to mock
+          const mapped: ApiMemory[] = MEMORY_ITEMS.map((m) => ({
+            id: m.id,
+            circle_id: DEMO_CIRCLE_ID,
+            author_id: activeProfile.id,
+            subject_id: DEMO_AMMA_ID,
+            kind: 'story',
+            title: m.title,
+            body: m.description || null,
+            media_path: null,
+            approximate_year: parseInt(m.year, 10) || 1980,
+            created_at: new Date().toISOString(),
+          }));
+          setMemories(mapped);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    // Realtime subscription for memories
+    const memSub = subscribeToMemories(DEMO_CIRCLE_ID, (row) => {
+      const newMem = row as unknown as ApiMemory;
+      setMemories((prev) => [newMem, ...prev.filter((m) => m.id !== newMem.id)]);
+    });
+
+    return () => {
+      cancelled = true;
+      removeRealtimeChannel(memSub);
+    };
+  }, [activeProfile.id]);
 
   const tabs: MemoryTab[] = ['All', 'Stories', 'Photos', 'Voice'];
 
@@ -43,24 +96,57 @@ export function MemoryBoxPage() {
     }
   };
 
-  const handleAddMemory = (e: React.FormEvent) => {
+  const handleAddMemory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const newItem: MemoryItem = {
-      id: `mem-${Date.now()}`,
-      year: newYear.trim() || new Date().getFullYear().toString(),
+    const approxYear = parseInt(newYear.trim(), 10) || new Date().getFullYear();
+    const tempId = `mem-${Date.now()}`;
+    const optimistic: ApiMemory = {
+      id: tempId,
+      circle_id: DEMO_CIRCLE_ID,
+      author_id: activeProfile.id,
+      subject_id: DEMO_AMMA_ID,
+      kind: newKind,
       title: newTitle.trim(),
-      description: newDesc.trim() || 'A cherished family memory shared with love.',
-      tone: memories.length % 2 === 0 ? 'cream' : 'sun',
+      body: newDesc.trim() || 'A cherished family memory shared with love.',
+      media_path: null,
+      approximate_year: approxYear,
+      created_at: new Date().toISOString(),
     };
 
-    setMemories((prev) => [...prev, newItem]);
+    setMemories((prev) => [optimistic, ...prev]);
     setNewYear('');
     setNewTitle('');
     setNewDesc('');
     setShowAddModal(false);
+
+    try {
+      const created = await createMemory(
+        {
+          subject_id: DEMO_AMMA_ID,
+          title: optimistic.title,
+          body: optimistic.body,
+          approximate_year: approxYear,
+          kind: newKind,
+        },
+        activeProfile.id,
+      );
+      if (created) {
+        setMemories((prev) => [created, ...prev.filter((m) => m.id !== tempId)]);
+      }
+    } catch (err) {
+      console.error('Failed to create memory on backend:', err);
+    }
   };
+
+  const filteredMemories = memories.filter((mem) => {
+    if (activeTab === 'All') return true;
+    if (activeTab === 'Stories') return mem.kind === 'story';
+    if (activeTab === 'Photos') return mem.kind === 'photo';
+    if (activeTab === 'Voice') return mem.kind === 'voice';
+    return true;
+  });
 
   return (
     <div className="memory-page">
@@ -89,7 +175,7 @@ export function MemoryBoxPage() {
         </p>
       </header>
 
-      {/* Tab row: 'All', 'Stories', 'Photos', 'Voice' */}
+      {/* Tab row */}
       <div className="memory-tabs" role="tablist" aria-label="Memory filters">
         {tabs.map((tab) => {
           const isActive = activeTab === tab;
@@ -119,7 +205,7 @@ export function MemoryBoxPage() {
         })}
       </div>
 
-      {/* Memory Grid */}
+      {/* Scrapbook Memory Grid with Tape & Rotation motifs */}
       <motion.div
         className="memory-grid"
         variants={containerVariants}
@@ -128,49 +214,68 @@ export function MemoryBoxPage() {
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '1.25rem',
-          marginTop: '1.25rem',
+          gap: '1.5rem',
+          marginTop: '1.5rem',
         }}
       >
-        {memories.map((item, index) => {
-          const isCream = item.tone === 'cream' || index === 0;
-          const toneClass = isCream ? 'memory-card--cream' : 'memory-card--sun';
+        {filteredMemories.map((item, index) => {
+          const isEven = index % 2 === 0;
+          const rotateDeg = isEven ? -1 : 1;
           const isPlaying = playingId === item.id;
 
           return (
             <motion.article
               key={item.id}
               variants={itemVariants}
-              className={`memory-card ${toneClass}`}
-              whileHover={{ y: -4, scale: 1.015 }}
+              className="memory-card"
+              whileHover={{ y: -5, scale: 1.02, rotate: 0 }}
               transition={{ duration: 0.2 }}
               style={{
-                backgroundColor: isCream ? 'var(--care-cream)' : 'var(--care-sun)',
-                borderRadius: 'var(--care-radius-lg, 30px)',
-                padding: '1.75rem',
+                backgroundColor: isEven ? 'var(--care-cream)' : 'var(--care-sun)',
+                borderRadius: 'var(--care-radius-lg, 28px)',
+                padding: '2rem 1.75rem 1.5rem',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
                 minHeight: '260px',
-                boxShadow: 'var(--care-shadow)',
-                border: '1px solid rgba(60, 41, 37, 0.06)',
+                boxShadow: 'var(--care-shadow, 0 10px 30px rgba(99, 65, 40, 0.08))',
+                border: '1px solid rgba(60, 41, 37, 0.08)',
                 position: 'relative',
+                transform: `rotate(${rotateDeg}deg)`,
               }}
             >
+              {/* Scrapbook Tape Strip Motif at top center */}
+              <div
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: -10,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: '64px',
+                  height: '20px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.65)',
+                  border: '1px dashed rgba(60, 41, 37, 0.15)',
+                  borderRadius: '3px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                  backdropFilter: 'blur(2px)',
+                }}
+              />
+
               <div>
-                {/* Year in large bold text */}
+                {/* Year in large bold display */}
                 <div
                   className="memory-year"
                   style={{
-                    fontSize: '2.5rem',
+                    fontSize: '2.4rem',
                     fontWeight: 900,
                     color: 'var(--care-ink)',
                     letterSpacing: '-0.04em',
                     lineHeight: 1,
-                    marginBottom: '0.75rem',
+                    marginBottom: '0.65rem',
                   }}
                 >
-                  {item.year}
+                  {item.approximate_year || 'Cherished'}
                 </div>
 
                 {/* Title */}
@@ -178,7 +283,7 @@ export function MemoryBoxPage() {
                   className="memory-title"
                   style={{
                     margin: '0 0 0.45rem 0',
-                    fontSize: '1.3rem',
+                    fontSize: '1.25rem',
                     fontWeight: 850,
                     color: 'var(--care-ink)',
                     lineHeight: 1.25,
@@ -188,18 +293,18 @@ export function MemoryBoxPage() {
                 </h3>
 
                 {/* Description */}
-                {item.description && (
+                {item.body && (
                   <p
                     className="memory-desc"
                     style={{
                       margin: '0 0 1.25rem 0',
-                      fontSize: '0.98rem',
+                      fontSize: '0.96rem',
                       color: 'var(--care-ink)',
                       opacity: 0.85,
                       lineHeight: 1.5,
                     }}
                   >
-                    {item.description}
+                    {item.body}
                   </p>
                 )}
               </div>
@@ -314,13 +419,13 @@ export function MemoryBoxPage() {
                 gap: '0.35rem',
               }}
             >
-              <Camera size={15} /> Voice note or photo
+              <Camera size={15} /> Voice note or story
             </span>
           </div>
         </motion.button>
       </motion.div>
 
-      {/* Tagline at bottom: 'A stronger tomorrow, together ❤️' */}
+      {/* Tagline at bottom */}
       <footer
         className="memory-tagline"
         style={{
@@ -390,7 +495,7 @@ export function MemoryBoxPage() {
                   <input
                     id="memoryYearInput"
                     type="text"
-                    placeholder="e.g. 1980 or 1995"
+                    placeholder="e.g. 1978 or 1983"
                     value={newYear}
                     onChange={(e) => setNewYear(e.target.value)}
                     style={{
@@ -421,7 +526,7 @@ export function MemoryBoxPage() {
                   <input
                     id="memoryTitleInput"
                     type="text"
-                    placeholder="e.g. Grandma's garden harvest"
+                    placeholder="e.g. Grandma's first harvest"
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     autoFocus
