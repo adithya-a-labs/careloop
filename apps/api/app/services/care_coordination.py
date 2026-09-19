@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from functools import lru_cache
 from threading import RLock
 from typing import Any
 from uuid import UUID, uuid4
 
 from app.core.config import settings
-from app.schemas.care import CareEventCreate, MemoryCreate, TaskCreate, TaskUpdate
+from app.schemas.care import (
+    CareEventCreate,
+    MemoryCreate,
+    TaskCreate,
+    TaskStatus,
+    TaskUpdate,
+)
 from app.services.errors import (
     BackendUnavailableError,
     ForbiddenError,
@@ -22,6 +28,8 @@ DEMO_MAYA_ID = "10000000-0000-0000-0000-000000000002"
 DEMO_RAHUL_ID = "10000000-0000-0000-0000-000000000003"
 DEMO_ANU_ID = "10000000-0000-0000-0000-000000000004"
 DEMO_CIRCLE_ID = "20000000-0000-0000-0000-000000000001"
+HANDOFF_DEFAULT_WINDOW_HOURS = 48
+DEMO_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
 
 
 def _utc_now() -> datetime:
@@ -33,7 +41,9 @@ def _iso(value: datetime) -> str:
 
 
 def _demo_state() -> dict[str, Any]:
-    today = _utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _utc_now().astimezone(DEMO_TIMEZONE).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
     profiles = {
         DEMO_AMMA_ID: {
             "id": DEMO_AMMA_ID,
@@ -145,7 +155,7 @@ def _demo_state() -> dict[str, Any]:
             "assigned_to": None,
             "status": "pending",
             "priority": "high",
-            "due_at": _iso(today + timedelta(hours=18)),
+            "due_at": _iso(today + timedelta(days=1, hours=15)),
             "completed_at": None,
             "source_event_id": None,
             "created_at": _iso(today + timedelta(hours=9)),
@@ -431,7 +441,7 @@ class CareCoordinationService:
                 .eq("circle_id", circle)
             )
             if since is not None:
-                query = query.gte("occurred_at", _iso(since))
+                query = query.gte("created_at", _iso(since))
             return self._execute(
                 query.order("occurred_at", desc=True).range(offset, offset + limit - 1)
             )
@@ -439,7 +449,7 @@ class CareCoordinationService:
             deepcopy(row)
             for row in self._state["events"].values()
             if row["circle_id"] == circle
-            and (since is None or datetime.fromisoformat(row["occurred_at"]) >= since)
+            and (since is None or datetime.fromisoformat(row["created_at"]) >= since)
         ]
         rows.sort(key=lambda row: row["occurred_at"], reverse=True)
         return rows[offset : offset + limit]
@@ -652,11 +662,27 @@ class CareCoordinationService:
             "availability", circle_id, actor_id, "starts_at", limit, offset
         )
 
+    def get_availability(
+        self, circle_id: UUID, actor_id: str
+    ) -> list[dict[str, Any]]:
+        return self.list_availability(circle_id, actor_id, 100, 0)
+
     def list_scheduled_items(
-        self, circle_id: UUID, actor_id: str, limit: int, offset: int
+        self,
+        circle_id: UUID,
+        actor_id: str,
+        limit: int,
+        offset: int,
+        starts_after: datetime | None = None,
     ) -> list[dict[str, Any]]:
         return self._list_circle_rows(
-            "scheduled_items", circle_id, actor_id, "starts_at", limit, offset
+            "scheduled_items",
+            circle_id,
+            actor_id,
+            "starts_at",
+            limit,
+            offset,
+            starts_after,
         )
 
     def _list_circle_rows(
@@ -667,22 +693,30 @@ class CareCoordinationService:
         order_by: str,
         limit: int,
         offset: int,
+        starts_after: datetime | None = None,
     ) -> list[dict[str, Any]]:
         circle = str(circle_id)
         self._assert_member(circle, actor_id)
         if self.uses_supabase:
-            return self._execute(
+            query = (
                 self._client()
                 .table(table)
                 .select("*")
                 .eq("circle_id", circle)
-                .order(order_by)
-                .range(offset, offset + limit - 1)
+            )
+            if starts_after is not None:
+                query = query.gte(order_by, _iso(starts_after))
+            return self._execute(
+                query.order(order_by).range(offset, offset + limit - 1)
             )
         rows = [
             deepcopy(row)
             for row in self._state[table].values()
             if row["circle_id"] == circle
+            and (
+                starts_after is None
+                or datetime.fromisoformat(row[order_by]) >= starts_after
+            )
         ]
         rows.sort(key=lambda row: row[order_by])
         return rows[offset : offset + limit]
@@ -715,22 +749,118 @@ class CareCoordinationService:
             self._state["memories"][created["id"]] = created
         return deepcopy(created)
 
+    def list_memories(
+        self,
+        circle_id: UUID,
+        actor_id: str,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, Any]]:
+        circle = str(circle_id)
+        self._assert_member(circle, actor_id)
+        if self.uses_supabase:
+            return self._execute(
+                self._client()
+                .table("memories")
+                .select(
+                    "id,circle_id,author_id,subject_id,kind,title,body,media_path,"
+                    "approximate_year,created_at"
+                )
+                .eq("circle_id", circle)
+                .order("created_at", desc=True)
+                .range(offset, offset + limit - 1)
+            )
+        rows = [
+            deepcopy(row)
+            for row in self._state["memories"].values()
+            if row["circle_id"] == circle
+        ]
+        rows.sort(key=lambda row: row["created_at"], reverse=True)
+        return rows[offset : offset + limit]
+
+    def get_members(self, circle_id: UUID, actor_id: str) -> list[dict[str, Any]]:
+        return self.list_members(circle_id, actor_id)
+
+    def get_tasks(self, circle_id: UUID, actor_id: str) -> list[dict[str, Any]]:
+        return self.list_tasks(circle_id, actor_id, 100, 0)
+
+    def assign_task(
+        self,
+        task_id: UUID,
+        member_id: UUID,
+        actor_id: str,
+    ) -> dict[str, Any]:
+        return self.update_task(task_id, actor_id, TaskUpdate(assigned_to=member_id))
+
+    def complete_task(self, task_id: UUID, actor_id: str) -> dict[str, Any]:
+        return self.update_task(
+            task_id, actor_id, TaskUpdate(status=TaskStatus.COMPLETED)
+        )
+
+    @staticmethod
+    def _member_reference(
+        profile_id: str,
+        members: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        member = members.get(profile_id)
+        if member is None:
+            return {
+                "profile_id": profile_id,
+                "display_name": "Former member",
+                "role": None,
+                "relationship": None,
+                "preferred_language": None,
+            }
+        return {
+            "profile_id": member["profile_id"],
+            "display_name": member["display_name"],
+            "role": member["role"],
+            "relationship": member.get("relationship"),
+            "preferred_language": member.get("preferred_language"),
+        }
+
     def handoff_context(
         self,
         circle_id: UUID,
         actor_id: str,
         since: datetime | None,
     ) -> dict[str, list[dict[str, Any]]]:
-        events = self.list_events(circle_id, actor_id, 100, 0, since)
+        now = _utc_now()
+        window_start = since or now - timedelta(hours=HANDOFF_DEFAULT_WINDOW_HOURS)
+        events = self.list_events(circle_id, actor_id, 100, 0, window_start)
         tasks = self.list_tasks(circle_id, actor_id, 100, 0)
-        scheduled = self.list_scheduled_items(circle_id, actor_id, 100, 0)
+        scheduled = self.list_scheduled_items(circle_id, actor_id, 100, 0, now)
+        members = {
+            row["profile_id"]: row for row in self.list_members(circle_id, actor_id)
+        }
+        enriched_events = [
+            {
+                **row,
+                "subject": self._member_reference(row["subject_id"], members),
+                "reporter": self._member_reference(row["reported_by"], members),
+            }
+            for row in events
+        ]
+        enriched_tasks = [
+            {
+                **row,
+                "assignee": (
+                    self._member_reference(row["assigned_to"], members)
+                    if row.get("assigned_to")
+                    else None
+                ),
+            }
+            for row in tasks
+        ]
         return {
-            "events_since_last_seen": events,
+            "events_since_last_seen": enriched_events,
             "pending_tasks": [
-                row for row in tasks if row["status"] not in {"done", "completed", "cancelled"}
+                row
+                for row in enriched_tasks
+                if row["status"] not in {"done", "completed", "cancelled"}
             ],
             "completed_tasks": [
-                row for row in tasks if row["status"] in {"done", "completed"}
+                row for row in enriched_tasks if row["status"] in {"done", "completed"}
             ],
             "upcoming": scheduled,
         }

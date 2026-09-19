@@ -19,6 +19,7 @@ def list_tasks(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[dict]:
+    """List circle tasks, optionally filtered by status, newest first."""
     try:
         return get_care_coordination_service().list_tasks(
             circle_id,
@@ -41,6 +42,7 @@ def create_task(
     payload: TaskCreate,
     actor_id: Annotated[str, Depends(get_actor_id)],
 ) -> dict:
+    """Create a real circle task; any assignee must be an active circle member."""
     try:
         return get_care_coordination_service().create_task(circle_id, actor_id, payload)
     except ServiceError as exc:
@@ -53,6 +55,7 @@ def update_task(
     payload: TaskUpdate,
     actor_id: Annotated[str, Depends(get_actor_id)],
 ) -> dict:
+    """Patch assignment, completion state, priority, timing, or task text."""
     try:
         return get_care_coordination_service().update_task(task_id, actor_id, payload)
     except ServiceError as exc:
