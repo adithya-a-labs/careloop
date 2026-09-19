@@ -1,8 +1,10 @@
+from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.care import CareEventCreate, TaskCreate
+from app.schemas.care import CareEventCreate, CareEventResponse, ScheduledItemResponse, TaskResponse
 
 
 class Message(BaseModel):
@@ -11,6 +13,32 @@ class Message(BaseModel):
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class HandoffSummary(StrictModel):
+    important: list[CareEventResponse]
+    pending: list[TaskResponse]
+    completed: list[TaskResponse]
+    upcoming: list[ScheduledItemResponse]
+    summary: str
+
+
+class CoordinationSuggestion(StrictModel):
+    action: Literal["suggest_assignee", "create_task", "assign_task", "complete_task", "list_availability"]
+    task_id: UUID | None = None
+    assignee_id: UUID | None = None
+    message: str
+    requires_confirmation: bool = True
+
+
+class MemoryExtractionResult(StrictModel):
+    title: str
+    approximate_year: int | None = None
+    people: list[str] = Field(default_factory=list)
+    places: list[str] = Field(default_factory=list)
+    themes: list[str] = Field(default_factory=list)
+    body: str
+    confidence: float = Field(ge=0.0, le=1.0)
 
 
 class VoiceTurn(StrictModel):
