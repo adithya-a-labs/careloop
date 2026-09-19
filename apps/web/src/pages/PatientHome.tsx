@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Mic, ChevronRight, CheckSquare } from 'lucide-react';
 import { useDemoProfile } from '../features/demo/DemoContext';
 import { CARE_CONTEXT_CARDS, WELLBEING_STATUS } from '../lib/mock-data';
+import { listCareEvents } from '../lib/api';
 import StatusCard from '../components/cards/StatusCard';
 
 const containerVariants: Variants = {
@@ -55,6 +56,44 @@ export function PatientHomePage() {
   const navigate = useNavigate();
   const { activeProfile } = useDemoProfile();
   const [hoveredAction, setHoveredAction] = useState<string | null>(null);
+  const [contextCards, setContextCards] = useState(CARE_CONTEXT_CARDS);
+
+  useEffect(() => {
+    let cancelled = false;
+    listCareEvents(activeProfile.id)
+      .then((events) => {
+        if (cancelled || !events || events.length === 0) return;
+          const derived = [...CARE_CONTEXT_CARDS];
+          const lunchEvent = events.find((e) => e.event_type === 'meal');
+          if (lunchEvent) {
+            const idx = derived.findIndex((c) => c.id === 'lunch');
+            if (idx !== -1) {
+              derived[idx] = {
+                ...derived[idx],
+                subtitle: lunchEvent.raw_transcript || 'Ate a little less',
+                time: new Date(lunchEvent.occurred_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+              };
+            }
+          }
+          const nurseEvent = events.find((e) => e.event_type === 'visit');
+          if (nurseEvent) {
+            const idx = derived.findIndex((c) => c.id === 'anu-visit');
+            if (idx !== -1) {
+              derived[idx] = {
+                ...derived[idx],
+                subtitle: 'Completed',
+                time: new Date(nurseEvent.occurred_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+              };
+            }
+          }
+          setContextCards(derived);
+        })
+        .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProfile.id]);
 
   return (
     <motion.div
@@ -174,7 +213,7 @@ export function PatientHomePage() {
         </div>
 
         <motion.div className="cards-list" variants={cardListVariants}>
-          {CARE_CONTEXT_CARDS.map((card) => (
+          {contextCards.map((card) => (
             <motion.div key={card.id} variants={itemVariants}>
               <StatusCard
                 id={card.id}
