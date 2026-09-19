@@ -19,8 +19,17 @@ router = APIRouter(tags=["handoffs"])
 def get_handoff_context(
     circle_id: UUID,
     actor_id: Annotated[str, Depends(get_actor_id)],
-    since: Annotated[datetime | None, Query()] = None,
+    since: Annotated[
+        datetime | None,
+        Query(
+            description=(
+                "UTC ingestion-time cursor. When omitted, events created in the last "
+                "48 hours are returned."
+            )
+        ),
+    ] = None,
 ) -> dict:
+    """Return structured catch-up data; this endpoint never generates prose."""
     if since is not None and since.tzinfo is None:
         raise HTTPException(
             status_code=422,

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +16,7 @@ from app.services.care_coordination import (
     DEMO_RAHUL_ID,
     get_care_coordination_service,
 )
+from app.services.errors import ForbiddenError
 
 
 @pytest.fixture
@@ -101,6 +104,42 @@ def test_task_create_assignment_and_completion_contract(demo_client: TestClient)
     assert completed.json()["status"] == "completed"
     assert completed.json()["completed_at"] is not None
 
+    listed = demo_client.get(f"/api/v1/circles/{DEMO_CIRCLE_ID}/tasks")
+    persisted = next(row for row in listed.json() if row["id"] == task_id)
+    assert persisted["assigned_to"] == DEMO_RAHUL_ID
+    assert persisted["status"] == "completed"
+
+
+def test_task_rejects_invalid_assignee(demo_client: TestClient) -> None:
+    response = demo_client.patch(
+        "/api/v1/tasks/40000000-0000-0000-0000-000000000001",
+        json={"assigned_to": str(uuid4())},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "member_required"
+
+
+def test_coordination_data_proves_rahul_is_available(demo_client: TestClient) -> None:
+    members = demo_client.get(f"/api/v1/circles/{DEMO_CIRCLE_ID}/members").json()
+    tasks = demo_client.get(f"/api/v1/circles/{DEMO_CIRCLE_ID}/tasks").json()
+    availability = demo_client.get(
+        f"/api/v1/circles/{DEMO_CIRCLE_ID}/availability"
+    ).json()
+
+    rahul = next(row for row in members if row["profile_id"] == DEMO_RAHUL_ID)
+    prescription = next(row for row in tasks if row["title"] == "Pick up prescription")
+    rahul_window = next(
+        row for row in availability if row["profile_id"] == DEMO_RAHUL_ID
+    )
+
+    assert rahul["display_name"] == "Rahul"
+    assert prescription["status"] == "pending"
+    assert prescription["assigned_to"] is None
+    assert datetime.fromisoformat(rahul_window["starts_at"]) <= datetime.fromisoformat(
+        prescription["due_at"]
+    ) <= datetime.fromisoformat(rahul_window["ends_at"])
+
 
 def test_memory_and_handoff_use_current_contract(demo_client: TestClient) -> None:
     memory = demo_client.post(
@@ -118,6 +157,14 @@ def test_memory_and_handoff_use_current_contract(demo_client: TestClient) -> Non
     assert memory.json()["body"] == "Uses body and approximate_year, not legacy fields."
     assert memory.json()["approximate_year"] == 1978
 
+    memories = demo_client.get(f"/api/v1/circles/{DEMO_CIRCLE_ID}/memories")
+    assert memories.status_code == 200
+    persisted_memory = next(
+        row for row in memories.json() if row["id"] == memory.json()["id"]
+    )
+    assert persisted_memory["subject_id"] == DEMO_AMMA_ID
+    assert persisted_memory["author_id"] == DEMO_MAYA_ID
+
     handoff = demo_client.get(f"/api/v1/circles/{DEMO_CIRCLE_ID}/handoff-context")
     assert handoff.status_code == 200
     assert set(handoff.json()) == {
@@ -126,6 +173,47 @@ def test_memory_and_handoff_use_current_contract(demo_client: TestClient) -> Non
         "completed_tasks",
         "upcoming",
     }
+    body = handoff.json()
+    event = body["events_since_last_seen"][0]
+    assert event["subject"]["display_name"]
+    assert event["reporter"]["display_name"]
+    assert {
+        "subject_id",
+        "reported_by",
+        "occurred_at",
+        "event_type",
+        "event_data",
+    } <= set(event)
+    task = body["pending_tasks"][0]
+    assert {"status", "assigned_to", "assignee", "priority", "due_at"} <= set(task)
+    assert all(
+        datetime.fromisoformat(item["starts_at"]) >= datetime.now(UTC)
+        for item in body["upcoming"]
+    )
+
+
+def test_handoff_window_and_timezone_semantics(demo_client: TestClient) -> None:
+    future = (datetime.now(UTC) + timedelta(days=2)).isoformat()
+    response = demo_client.get(
+        f"/api/v1/circles/{DEMO_CIRCLE_ID}/handoff-context",
+        params={"since": future},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["events_since_last_seen"] == []
+
+    naive = demo_client.get(
+        f"/api/v1/circles/{DEMO_CIRCLE_ID}/handoff-context",
+        params={"since": "2026-09-20T12:00:00"},
+    )
+    assert naive.status_code == 422
+
+
+def test_non_member_service_access_is_denied(demo_client: TestClient) -> None:
+    service = get_care_coordination_service()
+
+    with pytest.raises(ForbiddenError):
+        service.list_memories(UUID(DEMO_CIRCLE_ID), str(uuid4()), 50, 0)
 
 
 def test_irrelevant_voice_transcript_creates_no_event(demo_client: TestClient) -> None:

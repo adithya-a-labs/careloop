@@ -66,6 +66,14 @@ class CircleMemberResponse(CareModel):
     joined_at: datetime
 
 
+class MemberReference(CareModel):
+    profile_id: UUID
+    display_name: str
+    role: CircleRole | None = None
+    relationship: str | None = None
+    preferred_language: str | None = None
+
+
 class CareEventCreate(CareModel):
     subject_id: UUID
     reported_by: UUID | None = None
@@ -192,8 +200,17 @@ class MemoryResponse(CareModel):
     created_at: datetime
 
 
+class HandoffEventResponse(CareEventResponse):
+    subject: MemberReference
+    reporter: MemberReference
+
+
+class HandoffTaskResponse(TaskResponse):
+    assignee: MemberReference | None = None
+
+
 class HandoffContextResponse(CareModel):
-    events_since_last_seen: list[CareEventResponse]
-    pending_tasks: list[TaskResponse]
-    completed_tasks: list[TaskResponse]
+    events_since_last_seen: list[HandoffEventResponse]
+    pending_tasks: list[HandoffTaskResponse]
+    completed_tasks: list[HandoffTaskResponse]
     upcoming: list[ScheduledItemResponse]

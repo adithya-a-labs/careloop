@@ -165,7 +165,9 @@ values
     null,
     'pending',
     'high',
-    date_trunc('day', now()) + interval '18 hours',
+    (
+      (now() at time zone 'Asia/Kolkata')::date + interval '1 day 15 hours'
+    ) at time zone 'Asia/Kolkata',
     null,
     null,
     date_trunc('day', now()) + interval '9 hours',
@@ -204,8 +206,12 @@ values (
   '20000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000002',
   'Evening family call',
-  date_trunc('day', now()) + interval '19 hours',
-  date_trunc('day', now()) + interval '19 hours 30 minutes',
+  (
+    (now() at time zone 'Asia/Kolkata')::date + interval '1 day 19 hours'
+  ) at time zone 'Asia/Kolkata',
+  (
+    (now() at time zone 'Asia/Kolkata')::date + interval '1 day 19 hours 30 minutes'
+  ) at time zone 'Asia/Kolkata',
   null,
   date_trunc('day', now()) + interval '9 hours'
 )
@@ -241,8 +247,12 @@ values (
   '70000000-0000-0000-0000-000000000001',
   '20000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000003',
-  date_trunc('day', now()) + interval '1 day 13 hours',
-  date_trunc('day', now()) + interval '1 day 17 hours',
+  (
+    (now() at time zone 'Asia/Kolkata')::date + interval '1 day 13 hours'
+  ) at time zone 'Asia/Kolkata',
+  (
+    (now() at time zone 'Asia/Kolkata')::date + interval '1 day 17 hours'
+  ) at time zone 'Asia/Kolkata',
   'Available tomorrow afternoon'
 )
 on conflict (id) do update set

@@ -32,6 +32,7 @@ def list_members(
     circle_id: UUID,
     actor_id: Annotated[str, Depends(get_actor_id)],
 ) -> list[dict]:
+    """List active members with identity, role, relationship, and language."""
     try:
         return get_care_coordination_service().list_members(circle_id, actor_id)
     except ServiceError as exc:
@@ -45,6 +46,7 @@ def list_availability(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[dict]:
+    """List member availability windows in ascending start-time order."""
     try:
         return get_care_coordination_service().list_availability(
             circle_id, actor_id, limit, offset
