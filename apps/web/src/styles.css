@@ -690,7 +690,8 @@ button { color: var(--care-ink); }
 @media (max-width: 640px) {
   .profile-switcher-label { display: none; }
   .profile-pills { gap: 0.2rem; }
-  .profile-pill { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
+  .profile-pill { min-width: 44px; min-height: 44px; padding: 0.25rem; justify-content: center; }
+  .profile-pill-name { display: none; }
   .quick-grid, .memory-grid-new, .circle-grid, .quick-actions-grid { grid-template-columns: 1fr; }
   .stats { gap: 0.4rem; }
   .stats article { padding: 0.7rem; }

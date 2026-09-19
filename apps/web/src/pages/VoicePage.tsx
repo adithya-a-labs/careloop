@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence, type TargetAndTransition } from 'framer-motion';
 import { Mic, Check, Loader2, Volume2, X, ArrowLeft, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { VOICE_TRANSCRIPT_MOCK, VOICE_SUCCESS_MESSAGE } from '../lib/mock-data';
+import { createCareEvent, extractVoiceEvents } from '../lib/api';
+import { VOICE_TRANSCRIPT_MOCK } from '../lib/mock-data';
 
 export type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'success';
 
@@ -22,48 +23,57 @@ const DEMO_BUTTONS: DemoButton[] = [
 export function VoicePage() {
   const navigate = useNavigate();
   const [state, setState] = useState<VoiceState>('idle');
-  const [isAutoAdvancing, setIsAutoAdvancing] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [savedEventCount, setSavedEventCount] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Auto-advance sequence when started from idle orb tap
-  useEffect(() => {
-    if (!isAutoAdvancing) return;
+  const runHeroFlow = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    setErrorMessage(null);
+    setSavedEventCount(0);
+    setState('listening');
 
-    let timer: ReturnType<typeof setTimeout>;
-    if (state === 'listening') {
-      timer = setTimeout(() => {
-        setState('thinking');
-      }, 3000);
-    } else if (state === 'thinking') {
-      timer = setTimeout(() => {
-        setState('speaking');
-      }, 2200);
-    } else if (state === 'speaking') {
-      timer = setTimeout(() => {
-        setState('success');
-        setIsAutoAdvancing(false);
-      }, 3200);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      setState('thinking');
+      const extraction = await extractVoiceEvents(VOICE_TRANSCRIPT_MOCK);
+      if (extraction.events.length === 0) {
+        throw new Error('No care updates were found in this transcript.');
+      }
+
+      setState('speaking');
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await Promise.all(extraction.events.map(createCareEvent));
+      setSavedEventCount(extraction.events.length);
+      setState('success');
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'CareLoop could not share this update.',
+      );
+      setState('idle');
+    } finally {
+      setIsProcessing(false);
     }
-
-    return () => clearTimeout(timer);
-  }, [state, isAutoAdvancing]);
+  };
 
   // Orb click handling
   const handleOrbClick = () => {
     if (state === 'idle') {
-      setIsAutoAdvancing(true);
-      setState('listening');
-    } else if (state === 'listening') {
-      setIsAutoAdvancing(true);
-      setState('thinking');
+      void runHeroFlow();
     } else if (state === 'success') {
-      setIsAutoAdvancing(false);
       setState('idle');
+      setSavedEventCount(0);
     }
   };
 
   // Demo controls override everything
   const handleDemoSelect = (selectedState: VoiceState) => {
-    setIsAutoAdvancing(false);
+    if (selectedState === 'listening' || selectedState === 'success') {
+      void runHeroFlow();
+      return;
+    }
+    setErrorMessage(null);
     setState(selectedState);
   };
 
@@ -169,8 +179,9 @@ export function VoicePage() {
         <button
           type="button"
           onClick={() => {
-            setIsAutoAdvancing(false);
             setState('idle');
+            setErrorMessage(null);
+            setSavedEventCount(0);
           }}
           className="voice-header-btn"
           aria-label="Reset interaction"
@@ -216,6 +227,7 @@ export function VoicePage() {
           className="voice-orb-button"
           aria-label={`Voice orb (${state})`}
           onClick={handleOrbClick}
+          disabled={isProcessing}
           animate={getOrbAnimation(state)}
           style={{
             boxShadow: getOrbGlow(state),
@@ -252,12 +264,18 @@ export function VoicePage() {
               {state === 'listening' && "I'm listening..."}
               {state === 'thinking' && 'Understanding...'}
               {state === 'speaking' && "Here's what I heard"}
-              {state === 'success' && VOICE_SUCCESS_MESSAGE}
+              {state === 'success' && `${savedEventCount} updates added to your Care Circle`}
             </span>
             {state === 'listening' && <span className="voice-pulse-dot" />}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {errorMessage && (
+        <p className="form-error" role="alert">
+          {errorMessage}
+        </p>
+      )}
 
       {/* 4. Transcript Area */}
       <AnimatePresence>
@@ -285,12 +303,12 @@ export function VoicePage() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', color: 'var(--care-success)', fontWeight: 750, fontSize: '0.9rem' }}>
                   <Check size={18} strokeWidth={2.5} />
-                  <span>Captured to timeline & tasks</span>
+                  <span>Captured to shared timeline</span>
                 </div>
                 <button
                   type="button"
                   className="primary-button"
-                  onClick={() => navigate('/timeline', { state: { newVoiceEvent: true } })}
+                  onClick={() => navigate('/timeline')}
                   style={{
                     fontSize: '0.92rem',
                     padding: '0.7rem 1.25rem',

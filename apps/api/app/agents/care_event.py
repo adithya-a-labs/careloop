@@ -1,5 +1,5 @@
+from app.schemas.common import CareEventExtractionResult
 from app.services.llm import LLMService
-from app.schemas.common import CareEventExtractionResult, ExtractedCareEvent
 
 name = "care_event"
 allowed_tools = frozenset({"record_care_event"})

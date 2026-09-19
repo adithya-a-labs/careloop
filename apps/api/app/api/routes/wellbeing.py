@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+
 router = APIRouter(prefix="/wellbeing", tags=["wellbeing"])
 
 class CheckIn(BaseModel):

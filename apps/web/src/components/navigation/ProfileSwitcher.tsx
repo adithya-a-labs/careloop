@@ -34,6 +34,7 @@ export function ProfileSwitcher() {
               type="button"
               className={`profile-pill ${isActive ? 'active' : ''}`}
               onClick={() => handleSwitch(profile.id)}
+              aria-label={`View as ${profile.displayName}`}
               aria-pressed={isActive}
             >
               {isActive && (

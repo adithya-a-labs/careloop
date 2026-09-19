@@ -1,8 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import { Clock, Sparkles, PlusCircle } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
-import { TIMELINE_EVENTS, type TimelineEvent } from '../lib/mock-data';
+import { Clock } from 'lucide-react';
+import { useDemoProfile } from '../features/demo/DemoContext';
+import { listCareEvents, type CareEvent } from '../lib/api';
+import type { TimelineEvent } from '../lib/mock-data';
+
+const PROFILE_NAMES: Record<string, string> = {
+  '10000000-0000-0000-0000-000000000001': 'Amma',
+  '10000000-0000-0000-0000-000000000002': 'Maya',
+  '10000000-0000-0000-0000-000000000003': 'Rahul',
+  '10000000-0000-0000-0000-000000000004': 'Nurse Anu',
+};
+
+const EVENT_EMOJI: Record<string, string> = {
+  sleep: '😴',
+  meal: '🍽️',
+  mood: '💛',
+  medication: '💊',
+  activity: '🚶',
+  symptom: '📝',
+  appointment: '📅',
+  visit: '👩‍⚕️',
+  check_in: '🗣️',
+};
+
+function toTimelineEvent(event: CareEvent): TimelineEvent {
+  const subject = PROFILE_NAMES[event.subject_id] ?? 'Care recipient';
+  const reporter = PROFILE_NAMES[event.reported_by] ?? 'Care Circle member';
+  const occurredAt = new Date(event.occurred_at);
+  const isRecent = Date.now() - new Date(event.created_at).getTime() < 5 * 60 * 1000;
+  const eventLabel = event.event_type.replaceAll('_', ' ');
+
+  return {
+    id: event.id,
+    emoji: EVENT_EMOJI[event.event_type] ?? '💬',
+    title: `${subject} shared a ${eventLabel} update`,
+    description: event.raw_transcript
+      ? `“${event.raw_transcript}”`
+      : Object.values(event.event_data).map(String).join(' · '),
+    time: occurredAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    relativeTime: isRecent ? 'Just shared' : 'Shared update',
+    reporter: event.source === 'voice' ? `${reporter} (Voice)` : reporter,
+    concernsPerson: subject,
+    kind:
+      event.source === 'voice'
+        ? 'voice'
+        : event.event_type === 'meal' || event.event_type === 'medication'
+          ? event.event_type
+          : 'check-in',
+  };
+}
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -27,33 +74,30 @@ const itemVariants: Variants = {
 };
 
 export function TimelinePage() {
-  const location = useLocation();
-  const [events, setEvents] = useState<TimelineEvent[]>(TIMELINE_EVENTS);
-  const [hasAddedVoiceEvent, setHasAddedVoiceEvent] = useState(false);
+  const { activeProfile } = useDemoProfile();
+  const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Auto-add voice event if navigated from voice page
   useEffect(() => {
-    if (location.state?.newVoiceEvent && !hasAddedVoiceEvent) {
-      addSimulatedVoiceEvent();
-    }
-  }, [location.state, hasAddedVoiceEvent]);
+    let cancelled = false;
+    setIsLoading(true);
+    setErrorMessage(null);
+    listCareEvents()
+      .then((careEvents) => {
+        if (!cancelled) setEvents(careEvents.map(toTimelineEvent));
+      })
+      .catch(() => {
+        if (!cancelled) setErrorMessage('CareLoop could not load the shared timeline.');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
 
-  const addSimulatedVoiceEvent = () => {
-    if (hasAddedVoiceEvent) return;
-    const newEvent: TimelineEvent = {
-      id: `tl-voice-${Date.now()}`,
-      emoji: '🗣️',
-      title: 'Amma voice check-in processed',
-      description: '"I didn\'t sleep very well and I didn\'t eat much at lunch."',
-      time: 'Just now',
-      relativeTime: 'Live update',
-      reporter: 'Amma (Voice)',
-      concernsPerson: 'Amma',
-      kind: 'voice',
+    return () => {
+      cancelled = true;
     };
-    setEvents((prev) => [newEvent, ...prev]);
-    setHasAddedVoiceEvent(true);
-  };
+  }, [activeProfile.id]);
 
   return (
     <main className="timeline-page">
@@ -72,7 +116,7 @@ export function TimelinePage() {
         initial="hidden"
         animate="visible"
       >
-        {/* Ghost preview card for realtime event stream */}
+        {/* Shared-backend status card; realtime transport is a later upgrade. */}
         <motion.div
           className="timeline-item timeline-ghost"
           variants={itemVariants}
@@ -92,42 +136,30 @@ export function TimelinePage() {
             >
               <div className="timeline-ghost-badge">
                 <Clock size={15} aria-hidden="true" />
-                <span>New events will appear here in real time</span>
+                <span>Shared Care Circle timeline</span>
               </div>
-              {!hasAddedVoiceEvent && (
-                <button
-                  type="button"
-                  onClick={addSimulatedVoiceEvent}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                    background: 'var(--care-cream)',
-                    border: '1px solid var(--care-sun)',
-                    borderRadius: '999px',
-                    padding: '0.3rem 0.75rem',
-                    fontSize: '0.78rem',
-                    fontWeight: 750,
-                    cursor: 'pointer',
-                    color: 'var(--care-ink)',
-                  }}
-                >
-                  <Sparkles size={13} color="var(--care-peach)" />
-                  <span>Simulate voice event</span>
-                </button>
-              )}
             </div>
             <p className="timeline-ghost-hint">
-              Updates, notes, and check-ins from family appear here as they happen.
+              Updates, notes, and check-ins are loaded from the shared backend for every member.
             </p>
           </div>
         </motion.div>
 
-        {/* Real timeline events */}
+        {isLoading && <p className="timeline-ghost-hint">Loading shared updates…</p>}
+        {errorMessage && (
+          <p className="form-error" role="alert">
+            {errorMessage}
+          </p>
+        )}
+        {!isLoading && !errorMessage && events.length === 0 && (
+          <p className="timeline-ghost-hint">No Care Circle updates have been shared yet.</p>
+        )}
+
+        {/* Backend-derived timeline events */}
         <AnimatePresence initial={false}>
           {events.map((event) => {
             const isUpcoming = Boolean(event.isUpcoming);
-            const isJustAdded = event.id.startsWith('tl-voice-');
+            const isJustAdded = event.kind === 'voice' && event.relativeTime === 'Just shared';
 
             return (
               <motion.article

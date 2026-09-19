@@ -1,5 +1,6 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
-from typing import Literal, Union
 
 from app.schemas.care import CareEventCreate, TaskCreate
 
@@ -60,7 +61,16 @@ class AppointmentData(BaseModel):
 class NoteData(BaseModel):
     content: str
 
-EventData = Union[SleepData, MealData, MoodData, MedicationData, ActivityData, SymptomData, AppointmentData, NoteData]
+EventData = (
+    SleepData
+    | MealData
+    | MoodData
+    | MedicationData
+    | ActivityData
+    | SymptomData
+    | AppointmentData
+    | NoteData
+)
 
 class ExtractedCareEvent(BaseModel):
     type: Literal["sleep", "meal", "mood", "medication", "activity", "symptom", "appointment", "note"]

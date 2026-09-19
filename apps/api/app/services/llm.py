@@ -5,6 +5,7 @@ from typing import Any
 from app.core.config import settings
 from app.schemas.common import CareEventExtractionResult, ExtractedCareEvent
 
+
 class LLMService:
     """Backend-only provider adapter. No SQL or unrestricted function execution is exposed."""
     

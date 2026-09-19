@@ -10,6 +10,7 @@ from app.services.care_coordination import (
 
 def test_voice_extract_adapts_to_core_event_and_is_shared() -> None:
     get_care_coordination_service.cache_clear()
+    assert get_care_coordination_service().uses_supabase is False
     client = TestClient(app)
     transcript = "I didn't sleep very well and I didn't eat much at lunch."
 

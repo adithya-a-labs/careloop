@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from threading import RLock
 from typing import Any
@@ -25,7 +25,7 @@ DEMO_CIRCLE_ID = "20000000-0000-0000-0000-000000000001"
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _iso(value: datetime) -> str:
@@ -229,7 +229,9 @@ class CareCoordinationService:
 
     @property
     def uses_supabase(self) -> bool:
-        return bool(settings.supabase_url and settings.supabase_secret_key)
+        return not settings.demo_mode and bool(
+            settings.supabase_url and settings.supabase_secret_key
+        )
 
     def _client(self) -> Any:
         if not self.uses_supabase:
