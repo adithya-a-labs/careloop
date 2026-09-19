@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     supabase_secret_key: str = ""
     openai_api_key: str = ""
     demo_mode: bool = True
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file="../../.env", extra="ignore")
 
 @lru_cache
 def get_settings() -> Settings:
