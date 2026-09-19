@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
+from pytest import MonkeyPatch
 
+from app.core.config import settings
 from app.main import app
 from app.services.care_coordination import (
     DEMO_AMMA_ID,
@@ -8,7 +10,9 @@ from app.services.care_coordination import (
 )
 
 
-def test_voice_extract_adapts_to_core_event_and_is_shared() -> None:
+def test_voice_extract_adapts_to_core_event_and_is_shared(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "demo_mode", True)
+    monkeypatch.setattr(settings, "openai_api_key", "")
     get_care_coordination_service.cache_clear()
     assert get_care_coordination_service().uses_supabase is False
     client = TestClient(app)
