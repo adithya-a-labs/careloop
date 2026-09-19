@@ -1,5 +1,7 @@
 # Safety boundaries
 
+Author: Adithya A
+
 CareLoop coordinates and summarizes. It does not diagnose, prescribe, or alter medication.
 
 - Never represent a wellbeing check-in as a clinical assessment.

@@ -1,5 +1,7 @@
 # Three-minute demo
 
+Author: Adithya A
+
 1. Start at Welcome and create or join the Sharma family circle.
 2. Finish the accessible profile preferences and land on Meera's home.
 3. Open Talk, dictate a family update, and highlight confirmation before sharing.

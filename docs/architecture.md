@@ -1,5 +1,7 @@
 # Architecture
 
+Author: Adithya A
+
 CareLoop is a small pnpm monorepo with a React client, FastAPI orchestration layer and Supabase persistence.
 
 ```text

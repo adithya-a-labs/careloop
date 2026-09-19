@@ -1,0 +1,5 @@
+# Local ignored configuration copied into Codex-managed local worktrees.
+.env
+.env.local
+apps/web/.env.local
+apps/api/.env
