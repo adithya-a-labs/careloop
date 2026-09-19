@@ -1,71 +1,132 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence, type TargetAndTransition } from 'framer-motion';
-import { Mic, Check, Loader2, Volume2, X, ArrowLeft, ArrowRight, ShieldCheck } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { ArrowLeft, Check, Loader2, Mic, ShieldCheck, UserCheck, Volume2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { createCareEvent, extractVoiceEvents } from '../lib/api';
 import { useDemoProfile } from '../features/demo/DemoContext';
+import {
+  createCareEvent,
+  createMemory,
+  routeVoiceTurn,
+  updateTask,
+  type VoiceTurnResult,
+} from '../lib/api';
 import { startLiveVoice, type LiveVoiceConnection } from '../lib/live-voice';
 import { VOICE_TRANSCRIPT_MOCK } from '../lib/mock-data';
 import { isRealMode } from '../lib/supabase';
 
 export type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'success';
 
-interface DemoButton {
-  label: string;
-  value: VoiceState;
+function previewMessage(result: VoiceTurnResult | null) {
+  if (!result) return '';
+  if (result.preview.handoff_summary) return result.preview.handoff_summary.summary;
+  if (result.preview.coordination_suggestion) return result.preview.coordination_suggestion.message;
+  if (result.preview.memory_extraction) {
+    return `Save “${result.preview.memory_extraction.title}” to MemoryBox?`;
+  }
+  if (result.preview.extracted_events?.length) {
+    return `${result.preview.extracted_events.length} care update${result.preview.extracted_events.length === 1 ? '' : 's'} ready to share.`;
+  }
+  return result.preview.message ?? 'No CareLoop action was found.';
 }
-
-const DEMO_BUTTONS: DemoButton[] = [
-  { label: 'Idle', value: 'idle' },
-  { label: 'Listening', value: 'listening' },
-  { label: 'Thinking', value: 'thinking' },
-  { label: 'Speaking', value: 'speaking' },
-  { label: 'Done', value: 'success' },
-];
 
 export function VoicePage() {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
   const { activeProfile, authStatus, authError } = useDemoProfile();
   const [state, setState] = useState<VoiceState>('idle');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [savedEventCount, setSavedEventCount] = useState(0);
+  const [transcript, setTranscript] = useState('');
+  const [typedTranscript, setTypedTranscript] = useState('');
+  const [result, setResult] = useState<VoiceTurnResult | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState(VOICE_TRANSCRIPT_MOCK);
+  const [referencedTaskId, setReferencedTaskId] = useState<string | null>(null);
   const liveConnection = useRef<LiveVoiceConnection | null>(null);
 
-  useEffect(() => () => liveConnection.current?.close(), []);
+  useEffect(() => {
+    liveConnection.current?.close();
+    liveConnection.current = null;
+    setState('idle');
+    setTranscript('');
+    setTypedTranscript('');
+    setResult(null);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    setReferencedTaskId(null);
+    return () => liveConnection.current?.close();
+  }, [activeProfile.id]);
 
-  const persistTranscript = async (value: string) => {
+  const planTranscript = async (value: string) => {
+    const clean = value.trim();
+    if (!clean) return;
     setIsProcessing(true);
     setErrorMessage(null);
-    setSavedEventCount(0);
+    setStatusMessage(null);
+    setResult(null);
+    setTranscript(clean);
+    setState('thinking');
     try {
-      setState('thinking');
-      const extraction = await extractVoiceEvents(value, activeProfile);
-      if (extraction.events.length === 0) {
-        throw new Error('No care updates were found in this transcript.');
-      }
-
-      setState('speaking');
-      await Promise.all(extraction.events.map((event) => createCareEvent(event, activeProfile.id)));
-      setSavedEventCount(extraction.events.length);
-      setState('success');
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : 'CareLoop could not share this update.',
-      );
+      const planned = await routeVoiceTurn(clean, activeProfile, referencedTaskId);
+      setResult(planned);
+      const taskId = planned.preview.coordination_suggestion?.task_id;
+      if (taskId) setReferencedTaskId(taskId);
+      setStatusMessage(previewMessage(planned));
+      setState(planned.requires_confirmation ? 'speaking' : 'success');
+    } catch (reason) {
+      setErrorMessage(reason instanceof Error ? reason.message : 'CareLoop could not understand this request.');
       setState('idle');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const runDemoFlow = async (reason?: string) => {
-    setTranscript(VOICE_TRANSCRIPT_MOCK);
-    setState('listening');
-    if (reason) setErrorMessage(`${reason} Using the demo transcript instead.`);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    await persistTranscript(VOICE_TRANSCRIPT_MOCK);
+  const confirmResult = async () => {
+    if (!result?.requires_confirmation) return;
+    setIsProcessing(true);
+    setErrorMessage(null);
+    try {
+      if (result.tool === 'record_care_event') {
+        const events = result.preview.extracted_events ?? [];
+        if (!events.length) throw new Error('No care updates were available to share.');
+        await Promise.all(events.map((event) => createCareEvent(event, activeProfile.id)));
+        setStatusMessage(`${events.length} update${events.length === 1 ? '' : 's'} added to the shared timeline.`);
+      } else if (result.tool === 'save_memory') {
+        if (!result.preview.memory_create) throw new Error('The memory preview is incomplete.');
+        await createMemory(result.preview.memory_create, activeProfile.id);
+        setStatusMessage('Memory saved to the family MemoryBox.');
+      } else if (result.tool === 'draft_task') {
+        const suggestion = result.preview.coordination_suggestion;
+        if (!suggestion?.task_id) throw new Error('The task reference is missing.');
+        if (suggestion.action === 'assign_task' && suggestion.assignee_id) {
+          await updateTask(suggestion.task_id, { assigned_to: suggestion.assignee_id }, activeProfile.id);
+          setStatusMessage('Rahul’s got it ✨');
+        } else if (suggestion.action === 'complete_task') {
+          await updateTask(suggestion.task_id, { status: 'completed' }, activeProfile.id);
+          setStatusMessage('The task is marked complete.');
+        } else {
+          throw new Error('This coordination action is not ready to confirm.');
+        }
+      } else {
+        throw new Error('This preview does not contain a writable action.');
+      }
+      setState('success');
+    } catch (reason) {
+      setErrorMessage(reason instanceof Error ? reason.message : 'CareLoop could not save this action.');
+      setState('speaking');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const resetInteraction = () => {
+    liveConnection.current?.close();
+    liveConnection.current = null;
+    setState('idle');
+    setTranscript('');
+    setTypedTranscript('');
+    setResult(null);
+    setStatusMessage(null);
+    setErrorMessage(null);
   };
 
   const startHeroFlow = async () => {
@@ -75,22 +136,26 @@ export function VoicePage() {
       return;
     }
     setErrorMessage(null);
-    setSavedEventCount(0);
+    setResult(null);
+    setStatusMessage(null);
     setTranscript('');
     setState('listening');
     if (!isRealMode) {
-      await runDemoFlow();
+      await planTranscript(VOICE_TRANSCRIPT_MOCK);
       return;
     }
     try {
       liveConnection.current = await startLiveVoice(activeProfile, {
         onConnected: () => setState('listening'),
         onInputTranscript: setTranscript,
-        onSpeaking: () => setState('speaking'),
+        onSpeaking: () => undefined,
         onError: setErrorMessage,
       });
-    } catch (error) {
-      await runDemoFlow(error instanceof Error ? error.message : 'Live voice could not start.');
+    } catch (reason) {
+      setErrorMessage(
+        `${reason instanceof Error ? reason.message : 'Live voice could not start.'} You can type the same request below.`,
+      );
+      setState('idle');
     }
   };
 
@@ -98,346 +163,125 @@ export function VoicePage() {
     const connection = liveConnection.current;
     if (!connection) return;
     liveConnection.current = null;
-    const completedTranscript = connection.transcript();
+    const completedTranscript = connection.transcript().trim();
     connection.close();
     if (!completedTranscript) {
-      await runDemoFlow('No live transcript was received.');
-      return;
-    }
-    setTranscript(completedTranscript);
-    await persistTranscript(completedTranscript);
-  };
-
-  // Orb click handling
-  const handleOrbClick = () => {
-    if (state === 'idle') {
-      void startHeroFlow();
-    } else if (liveConnection.current && (state === 'listening' || state === 'speaking')) {
-      void finishLiveFlow();
-    } else if (state === 'success') {
+      setErrorMessage('No transcript was received. Try again or type your request below.');
       setState('idle');
-      setSavedEventCount(0);
-    }
-  };
-
-  // Demo controls override everything
-  const handleDemoSelect = (selectedState: VoiceState) => {
-    if (selectedState === 'listening' || selectedState === 'success') {
-      void runDemoFlow();
       return;
     }
-    setErrorMessage(null);
-    setState(selectedState);
+    await planTranscript(completedTranscript);
   };
 
-  // Orb dynamic glow based on state
-  const getOrbGlow = (voiceState: VoiceState): string => {
-    switch (voiceState) {
-      case 'idle':
-        return '0 0 24px rgba(255, 126, 126, 0.28), 0 14px 38px rgba(99, 65, 40, 0.12)';
-      case 'listening':
-        return '0 0 45px rgba(255, 126, 126, 0.75), 0 0 75px rgba(255, 203, 86, 0.5)';
-      case 'thinking':
-        return '0 0 35px rgba(255, 203, 86, 0.65), 0 0 60px rgba(255, 162, 89, 0.4)';
-      case 'speaking':
-        return '0 0 42px rgba(255, 162, 89, 0.7), 0 0 70px rgba(255, 126, 126, 0.5)';
-      case 'success':
-        return '0 0 45px rgba(95, 143, 114, 0.65), 0 0 70px rgba(255, 203, 86, 0.45)';
-    }
+  const handleOrbClick = () => {
+    if (state === 'idle') void startHeroFlow();
+    else if (liveConnection.current && state === 'listening') void finishLiveFlow();
+    else if (state === 'success') resetInteraction();
   };
 
-  // Framer-motion orb animations
-  const getOrbAnimation = (voiceState: VoiceState): TargetAndTransition => {
-    switch (voiceState) {
-      case 'idle':
-        return {
-          scale: [1, 1.04, 1],
-          rotate: 0,
-          transition: {
-            scale: { duration: 3, repeat: Infinity, ease: 'easeInOut' },
-          },
-        };
-      case 'listening':
-        return {
-          scale: [1, 1.12, 1],
-          rotate: 0,
-          transition: {
-            scale: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' },
-          },
-        };
-      case 'thinking':
-        return {
-          rotate: [0, 8, -8, 0],
-          scale: [1, 1.05, 0.98, 1],
-          transition: {
-            rotate: { duration: 2.4, repeat: Infinity, ease: 'easeInOut' },
-            scale: { duration: 1.6, repeat: Infinity, ease: 'easeInOut' },
-          },
-        };
-      case 'speaking':
-        return {
-          scale: [1, 1.08, 1],
-          rotate: 0,
-          transition: {
-            scale: { duration: 0.8, repeat: Infinity, ease: 'easeInOut' },
-          },
-        };
-      case 'success':
-        return {
-          scale: [1, 1.15, 1],
-          rotate: 0,
-          transition: {
-            scale: { duration: 0.5, times: [0, 0.6, 1], ease: 'easeOut' },
-          },
-        };
-    }
-  };
+  const orbIcon = state === 'thinking'
+    ? <Loader2 size={48} aria-hidden="true" />
+    : state === 'success'
+      ? <Check size={52} aria-hidden="true" />
+      : state === 'speaking'
+        ? <Volume2 size={48} aria-hidden="true" />
+        : <Mic size={48} aria-hidden="true" />;
 
-  // Icon inside orb
-  const renderOrbIcon = (voiceState: VoiceState) => {
-    switch (voiceState) {
-      case 'idle':
-      case 'listening':
-        return <Mic size={48} strokeWidth={2.4} aria-hidden="true" />;
-      case 'thinking':
-        return (
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1.4, repeat: Infinity, ease: 'linear' }}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Loader2 size={48} strokeWidth={2.4} aria-hidden="true" />
-          </motion.div>
-        );
-      case 'speaking':
-        return <Volume2 size={48} strokeWidth={2.4} aria-hidden="true" />;
-      case 'success':
-        return <Check size={52} strokeWidth={3} aria-hidden="true" />;
-    }
-  };
+  const suggestion = result?.preview.coordination_suggestion;
 
   return (
     <div className="voice-page">
-      {/* 1. Header */}
       <header className="voice-header">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="voice-header-btn"
-          aria-label="Go back"
-        >
+        <button type="button" onClick={() => navigate(-1)} className="voice-header-btn" aria-label="Go back">
           <ArrowLeft size={22} />
         </button>
         <h1 className="voice-page-title">Talk to CareLoop</h1>
-        <button
-          type="button"
-          onClick={() => {
-            liveConnection.current?.close();
-            liveConnection.current = null;
-            setState('idle');
-            setErrorMessage(null);
-            setSavedEventCount(0);
-          }}
-          className="voice-header-btn"
-          aria-label="Reset interaction"
-          title="Reset to idle"
-        >
+        <button type="button" onClick={resetInteraction} className="voice-header-btn" aria-label="Reset interaction">
           <X size={20} />
         </button>
       </header>
 
-      {/* 2. Voice Orb */}
       <div className="orb-wrapper">
-        <AnimatePresence>
-          {state === 'listening' && (
-            <div className="orb-rings" key="orb-rings">
-              <motion.div
-                className="voice-ring"
-                initial={{ scale: 1, opacity: 0.6 }}
-                animate={{ scale: 2.5, opacity: 0 }}
-                transition={{
-                  duration: 1.8,
-                  repeat: Infinity,
-                  ease: 'easeOut',
-                  delay: 0,
-                }}
-              />
-              <motion.div
-                className="voice-ring"
-                initial={{ scale: 1, opacity: 0.6 }}
-                animate={{ scale: 2.5, opacity: 0 }}
-                transition={{
-                  duration: 1.8,
-                  repeat: Infinity,
-                  ease: 'easeOut',
-                  delay: 0.9,
-                }}
-              />
-            </div>
-          )}
-        </AnimatePresence>
-
         <motion.button
           type="button"
           className="voice-orb-button"
-          aria-label={`Voice orb (${state})`}
+          aria-label={state === 'listening' ? 'Finish recording' : `Voice assistant: ${state}`}
           onClick={handleOrbClick}
-          disabled={isProcessing || (isRealMode && authStatus !== 'authenticated')}
-          aria-busy={isRealMode && authStatus === 'loading'}
-          animate={getOrbAnimation(state)}
-          style={{
-            boxShadow: getOrbGlow(state),
-          }}
+          disabled={isProcessing || (isRealMode && authStatus !== 'authenticated') || state === 'speaking'}
+          aria-busy={isProcessing}
+          animate={reduceMotion ? undefined : state === 'listening' ? { scale: [1, 1.1, 1] } : undefined}
+          transition={reduceMotion ? undefined : { duration: 1.2, repeat: Infinity }}
         >
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={state}
-              initial={{ opacity: 0, scale: 0.7 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.7 }}
-              transition={{ duration: 0.2 }}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              {renderOrbIcon(state)}
-            </motion.div>
-          </AnimatePresence>
+          {orbIcon}
         </motion.button>
       </div>
 
-      {/* 3. State Label Below Orb */}
-      <div className="voice-status-label">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={state}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.22 }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <span>
-              {state === 'idle' &&
-                (isRealMode && authStatus === 'loading'
-                  ? `Signing in as ${activeProfile.displayName}…`
-                  : isRealMode && authStatus === 'failed'
-                    ? 'Sign-in required before talking'
-                    : 'Tap to start talking')}
-              {state === 'listening' &&
-                (liveConnection.current ? 'Listening — tap when finished' : "I'm listening...")}
-              {state === 'thinking' && 'Understanding...'}
-              {state === 'speaking' && "Here's what I heard"}
-              {state === 'success' && `${savedEventCount} updates added to your Care Circle`}
-            </span>
-            {state === 'listening' && <span className="voice-pulse-dot" />}
-          </motion.div>
-        </AnimatePresence>
+      <div className="voice-status-label" aria-live="polite">
+        {state === 'idle' && (authStatus === 'loading' ? `Signing in as ${activeProfile.displayName}…` : 'Tap to start talking')}
+        {state === 'listening' && 'Listening — tap when finished'}
+        {state === 'thinking' && 'Routing your request…'}
+        {state === 'speaking' && 'Review before sharing'}
+        {state === 'success' && (statusMessage ?? 'Ready')}
       </div>
 
-      {errorMessage && (
-        <p className="form-error" role="alert">
-          {errorMessage}
-        </p>
-      )}
-      {!errorMessage && isRealMode && authStatus === 'failed' && authError && (
-        <p className="form-error" role="alert">
-          {authError}
-        </p>
-      )}
+      {errorMessage && <p className="form-error" role="alert">{errorMessage}</p>}
 
-      {/* 4. Transcript Area */}
+      <form
+        className="voice-text-alternative"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void planTranscript(typedTranscript);
+        }}
+      >
+        <label htmlFor="voiceTextRequest">Or type your request</label>
+        <div className="voice-text-row">
+          <input
+            id="voiceTextRequest"
+            value={typedTranscript}
+            onChange={(event) => setTypedTranscript(event.target.value)}
+            placeholder="Catch me up, ask who can help, or share a memory"
+          />
+          <button type="submit" className="primary-button touch-target" disabled={isProcessing || !typedTranscript.trim()}>
+            Send
+          </button>
+        </div>
+      </form>
+
       <AnimatePresence>
-        {(state === 'speaking' || state === 'success') && (
-          <motion.div
+        {(state === 'speaking' || state === 'success') && result && (
+          <motion.section
             className="voice-transcript"
-            initial={{ opacity: 0, y: 16, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.96 }}
-            transition={{ duration: 0.32, ease: 'easeOut' }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
           >
-            <div className="voice-transcript-tag">
-              {state === 'speaking' ? 'Transcribing...' : 'Care circle update'}
-            </div>
-            <blockquote className="voice-transcript-quote">
-              “{transcript || 'Listening for your update…'}”
-            </blockquote>
-            {state === 'success' && (
-              <motion.div
-                className="voice-transcript-success-badge"
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15, duration: 0.25 }}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'stretch',
-                  gap: '0.75rem',
-                  width: '100%',
-                  maxWidth: '340px',
-                  margin: '0.8rem auto 0',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.4rem',
-                    color: 'var(--care-success)',
-                    fontWeight: 750,
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  <Check size={18} strokeWidth={2.5} />
-                  <span>Captured to shared timeline</span>
-                </div>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => navigate('/timeline')}
-                  style={{
-                    fontSize: '0.92rem',
-                    padding: '0.7rem 1.25rem',
-                    boxShadow: '0 6px 18px rgba(255, 126, 126, 0.3)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <span>View in Timeline</span>
-                  <ArrowRight size={16} />
-                </button>
-              </motion.div>
+            <div className="voice-transcript-tag">{result.preview.intent.replaceAll('_', ' ')}</div>
+            <blockquote className="voice-transcript-quote">“{transcript}”</blockquote>
+            <p className="voice-preview-message">{statusMessage}</p>
+
+            {result.requires_confirmation && state === 'speaking' && (
+              <button type="button" className="primary-button touch-target" onClick={() => void confirmResult()} disabled={isProcessing}>
+                {isProcessing ? 'Saving…' : result.tool === 'save_memory' ? 'Save memory' : result.tool === 'draft_task' ? 'Confirm assignment' : 'Share update'}
+              </button>
             )}
-          </motion.div>
+
+            {!result.requires_confirmation && suggestion?.action === 'suggest_assignee' && suggestion.assignee_id && (
+              <button
+                type="button"
+                className="primary-button touch-target"
+                onClick={() => void planTranscript('Ask Rahul.')}
+                disabled={isProcessing}
+              >
+                <UserCheck size={18} aria-hidden="true" /> Ask Rahul
+              </button>
+            )}
+          </motion.section>
         )}
       </AnimatePresence>
 
-      {/* 5. Demo Controls */}
-      <div className="voice-demo-controls" role="group" aria-label="Voice demo state controls">
-        <span className="voice-demo-label">Demo:</span>
-        {DEMO_BUTTONS.map(({ label, value }) => {
-          const isActive = state === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              className={`voice-demo-pill ${isActive ? 'active' : ''}`}
-              onClick={() => handleDemoSelect(value)}
-              aria-pressed={isActive}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 6. Safety Notice */}
       <div className="voice-safety">
-        <ShieldCheck size={20} />
-        <p>
-          CareLoop coordinates and summarizes. It does not diagnose, prescribe, or alter medication.
-        </p>
+        <ShieldCheck size={20} aria-hidden="true" />
+        <p>CareLoop coordinates and summarizes. It does not diagnose, prescribe, or alter medication.</p>
       </div>
     </div>
   );

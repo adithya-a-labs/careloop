@@ -246,16 +246,17 @@ class CareCoordinationService:
     def _client(self) -> Any:
         if not self.uses_supabase:
             raise BackendUnavailableError()
-        if self._supabase is None:
-            try:
-                from supabase import create_client
+        with self._lock:
+            if self._supabase is None:
+                try:
+                    from supabase import create_client
 
-                self._supabase = create_client(
-                    settings.supabase_url,
-                    settings.supabase_secret_key,
-                )
-            except Exception as exc:
-                raise BackendUnavailableError() from exc
+                    self._supabase = create_client(
+                        settings.supabase_url,
+                        settings.supabase_secret_key,
+                    )
+                except Exception as exc:
+                    raise BackendUnavailableError() from exc
         return self._supabase
 
     def resolve_actor(self, authorization: str | None) -> str:
@@ -270,7 +271,11 @@ class CareCoordinationService:
         if not self.uses_supabase:
             raise BackendUnavailableError()
         try:
-            response = self._client().auth.get_user(token)
+            # The synchronous Supabase client owns shared HTTP transports.
+            # Serialize access so concurrent page hydration cannot corrupt a
+            # request while another endpoint verifies a session.
+            with self._lock:
+                response = self._client().auth.get_user(token)
             user = getattr(response, "user", None)
             user_id = getattr(user, "id", None)
         except Exception as exc:
@@ -281,7 +286,8 @@ class CareCoordinationService:
 
     def _execute(self, query: Any) -> list[dict[str, Any]]:
         try:
-            response = query.execute()
+            with self._lock:
+                response = query.execute()
             return list(response.data or [])
         except Exception as exc:
             raise BackendUnavailableError() from exc

@@ -21,7 +21,7 @@ Return a JSON object matching HandoffSummary schema:
 
 ## Rules
 
-1. **Summary must be ~5 seconds to read** (~2-3 sentences, under 300 chars)
+1. **Summary must be ~5 seconds to read** (1-2 short sentences, no more than 22 words)
 2. **Prioritize by significance**:
    - Important: Health changes, missed meals, mood shifts, completed visits, new symptoms
    - Pending: High-priority tasks, unassigned prescriptions, upcoming deadlines

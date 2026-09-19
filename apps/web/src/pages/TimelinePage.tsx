@@ -5,7 +5,6 @@ import { useDemoProfile } from '../features/demo/DemoContext';
 import { DEMO_CIRCLE_ID, listCareEvents, type CareEvent } from '../lib/api';
 import type { TimelineEvent } from '../lib/mock-data';
 import {
-  ensureDemoSession,
   removeRealtimeChannel,
   subscribeToCareEvents,
 } from '../lib/supabase';
@@ -79,7 +78,7 @@ const itemVariants: Variants = {
 };
 
 export function TimelinePage() {
-  const { activeProfile } = useDemoProfile();
+  const { activeProfile, authStatus } = useDemoProfile();
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -89,8 +88,11 @@ export function TimelinePage() {
     setIsLoading(true);
     setErrorMessage(null);
     let channel: ReturnType<typeof subscribeToCareEvents> = null;
-    ensureDemoSession(activeProfile.id)
-      .then(() => listCareEvents(activeProfile.id))
+    if (authStatus !== 'authenticated') {
+      setIsLoading(authStatus === 'loading');
+      return;
+    }
+    listCareEvents(activeProfile.id)
       .then((careEvents) => {
         if (cancelled) return;
         setEvents(careEvents.map(toTimelineEvent));
@@ -113,7 +115,7 @@ export function TimelinePage() {
       cancelled = true;
       void removeRealtimeChannel(channel);
     };
-  }, [activeProfile.id]);
+  }, [activeProfile.id, authStatus]);
 
   return (
     <main className="timeline-page">

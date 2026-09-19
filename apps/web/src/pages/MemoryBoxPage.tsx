@@ -10,7 +10,6 @@ import {
   type ApiMemory,
 } from '../lib/api';
 import { subscribeToMemories, removeRealtimeChannel } from '../lib/supabase';
-import { MEMORY_ITEMS, type MemoryItem } from '../lib/mock-data';
 
 type MemoryTab = 'All' | 'Stories' | 'Photos' | 'Voice';
 
@@ -34,7 +33,7 @@ const itemVariants: Variants = {
 };
 
 export function MemoryBoxPage() {
-  const { activeProfile } = useDemoProfile();
+  const { activeProfile, authStatus } = useDemoProfile();
   const [activeTab, setActiveTab] = useState<MemoryTab>('All');
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [memories, setMemories] = useState<ApiMemory[]>([]);
@@ -44,47 +43,43 @@ export function MemoryBoxPage() {
   const [newDesc, setNewDesc] = useState('');
   const [newKind, setNewKind] = useState<'story' | 'photo' | 'voice'>('story');
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load real persisted memories
   useEffect(() => {
     let cancelled = false;
+    let memSub: ReturnType<typeof subscribeToMemories> = null;
+    setMemories([]);
+    setLoading(true);
+    setError(null);
+    if (authStatus !== 'authenticated') {
+      setLoading(authStatus === 'loading');
+      return;
+    }
     listMemories(activeProfile.id)
       .then((data) => {
         if (cancelled) return;
-        if (data && data.length > 0) {
-          setMemories(data);
-        } else {
-          // Fallback to mock
-          const mapped: ApiMemory[] = MEMORY_ITEMS.map((m) => ({
-            id: m.id,
-            circle_id: DEMO_CIRCLE_ID,
-            author_id: activeProfile.id,
-            subject_id: DEMO_AMMA_ID,
-            kind: 'story',
-            title: m.title,
-            body: m.description || null,
-            media_path: null,
-            approximate_year: parseInt(m.year, 10) || 1980,
-            created_at: new Date().toISOString(),
-          }));
-          setMemories(mapped);
+        setMemories(data);
+        memSub = subscribeToMemories(DEMO_CIRCLE_ID, (row) => {
+          const newMemory = row as unknown as ApiMemory;
+          setMemories((current) => [newMemory, ...current.filter((memory) => memory.id !== newMemory.id)]);
+        });
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) {
+          setError(reason instanceof Error ? reason.message : 'CareLoop could not load MemoryBox.');
         }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
 
-    // Realtime subscription for memories
-    const memSub = subscribeToMemories(DEMO_CIRCLE_ID, (row) => {
-      const newMem = row as unknown as ApiMemory;
-      setMemories((prev) => [newMem, ...prev.filter((m) => m.id !== newMem.id)]);
-    });
-
     return () => {
       cancelled = true;
-      removeRealtimeChannel(memSub);
+      void removeRealtimeChannel(memSub);
     };
-  }, [activeProfile.id]);
+  }, [activeProfile.id, authStatus]);
 
   const tabs: MemoryTab[] = ['All', 'Stories', 'Photos', 'Voice'];
 
@@ -101,42 +96,28 @@ export function MemoryBoxPage() {
     if (!newTitle.trim()) return;
 
     const approxYear = parseInt(newYear.trim(), 10) || new Date().getFullYear();
-    const tempId = `mem-${Date.now()}`;
-    const optimistic: ApiMemory = {
-      id: tempId,
-      circle_id: DEMO_CIRCLE_ID,
-      author_id: activeProfile.id,
-      subject_id: DEMO_AMMA_ID,
-      kind: newKind,
-      title: newTitle.trim(),
-      body: newDesc.trim() || 'A cherished family memory shared with love.',
-      media_path: null,
-      approximate_year: approxYear,
-      created_at: new Date().toISOString(),
-    };
-
-    setMemories((prev) => [optimistic, ...prev]);
-    setNewYear('');
-    setNewTitle('');
-    setNewDesc('');
-    setShowAddModal(false);
-
+    setSaving(true);
+    setError(null);
     try {
       const created = await createMemory(
         {
           subject_id: DEMO_AMMA_ID,
-          title: optimistic.title,
-          body: optimistic.body,
+          title: newTitle.trim(),
+          body: newDesc.trim() || null,
           approximate_year: approxYear,
           kind: newKind,
         },
         activeProfile.id,
       );
-      if (created) {
-        setMemories((prev) => [created, ...prev.filter((m) => m.id !== tempId)]);
-      }
-    } catch (err) {
-      console.error('Failed to create memory on backend:', err);
+      setMemories((prev) => [created, ...prev.filter((memory) => memory.id !== created.id)]);
+      setNewYear('');
+      setNewTitle('');
+      setNewDesc('');
+      setShowAddModal(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'CareLoop could not save this memory.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -204,6 +185,12 @@ export function MemoryBoxPage() {
           );
         })}
       </div>
+
+      {loading && <p className="timeline-ghost-hint">Loading real family memories…</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {!loading && !error && filteredMemories.length === 0 && (
+        <p className="timeline-ghost-hint">No memories have been shared yet.</p>
+      )}
 
       {/* Scrapbook Memory Grid with Tape & Rotation motifs */}
       <motion.div
@@ -384,6 +371,9 @@ export function MemoryBoxPage() {
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="memory-dialog-title"
             style={{
               width: '60px',
               height: '60px',
@@ -471,7 +461,7 @@ export function MemoryBoxPage() {
                 boxShadow: 'var(--care-shadow)',
               }}
             >
-              <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.4rem', fontWeight: 900 }}>
+              <h2 id="memory-dialog-title" style={{ margin: '0 0 0.5rem 0', fontSize: '1.4rem', fontWeight: 900 }}>
                 Preserve a Family Memory
               </h2>
               <p style={{ margin: '0 0 1.25rem 0', color: 'var(--care-muted)', fontSize: '0.92rem' }}>
@@ -593,6 +583,7 @@ export function MemoryBoxPage() {
                   </button>
                   <button
                     type="submit"
+                    disabled={saving}
                     style={{
                       padding: '0.65rem 1.4rem',
                       borderRadius: '999px',
@@ -604,7 +595,7 @@ export function MemoryBoxPage() {
                       boxShadow: '0 6px 16px rgba(255, 126, 126, 0.28)',
                     }}
                   >
-                    Save memory
+                    {saving ? 'Saving…' : 'Save memory'}
                   </button>
                 </div>
               </form>

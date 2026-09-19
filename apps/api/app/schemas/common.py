@@ -1,10 +1,15 @@
-from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.care import CareEventCreate, CareEventResponse, ScheduledItemResponse, TaskResponse
+from app.schemas.care import (
+    CareEventCreate,
+    HandoffEventResponse,
+    HandoffTaskResponse,
+    ScheduledItemResponse,
+    TaskCreate,
+)
 
 
 class Message(BaseModel):
@@ -16,11 +21,17 @@ class StrictModel(BaseModel):
 
 
 class HandoffSummary(StrictModel):
-    important: list[CareEventResponse]
-    pending: list[TaskResponse]
-    completed: list[TaskResponse]
+    important: list[HandoffEventResponse]
+    pending: list[HandoffTaskResponse]
+    completed: list[HandoffTaskResponse]
     upcoming: list[ScheduledItemResponse]
     summary: str
+
+
+class HandoffNarrative(StrictModel):
+    """Provider output kept separate from authoritative database records."""
+
+    summary: str = Field(min_length=1, max_length=420)
 
 
 class CoordinationSuggestion(StrictModel):
@@ -44,12 +55,15 @@ class MemoryExtractionResult(StrictModel):
 class VoiceTurn(StrictModel):
     circle_id: str
     transcript: str = Field(min_length=1, max_length=8000)
-    speaker_id: str | None = None
-    patient_id: str | None = None
-    role: str | None = None
-    relationship: str | None = None
-    patient_name: str | None = None
-    preferred_language: str | None = None
+    user_id: str | None = None
+    speaker_id: str
+    speaker_name: str | None = None
+    patient_id: str
+    role: str
+    relationship: str
+    patient_name: str
+    preferred_language: str
+    referenced_task_id: str | None = None
 
 
 class LiveSessionCreate(StrictModel):
@@ -78,9 +92,9 @@ class LiveSessionResponse(StrictModel):
     transport: LiveTransport
 
 
-class ToolResult(BaseModel):
+class ToolResult(StrictModel):
     tool: str
-    status: str = "draft"
+    status: Literal["draft", "ready", "no_action"] = "draft"
     preview: dict[str, object]
     requires_confirmation: bool = True
 
@@ -147,9 +161,9 @@ __all__ = [
     "CareEventCreate",
     "CareEventExtractionResult",
     "ExtractedCareEvent",
-    "Message",
     "LiveSessionCreate",
     "LiveSessionResponse",
+    "Message",
     "TaskCreate",
     "ToolResult",
     "VoiceTurn",

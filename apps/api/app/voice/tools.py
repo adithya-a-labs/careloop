@@ -1,9 +1,9 @@
 from app.agents.care_event import extract_events
-from app.agents.carebridge import route_and_delegate, get_intent
+from app.agents.carebridge import get_intent
 from app.agents.coordination import coordinate
 from app.agents.handoff import generate_handoff_summary
-from app.agents.memory import extract_memory
 from app.agents.intent_router import Intent
+from app.agents.memory import extract_memory
 from app.schemas.common import (
     CareEventExtractionResult,
     CoordinationSuggestion,
@@ -11,16 +11,34 @@ from app.schemas.common import (
     MemoryExtractionResult,
 )
 
-ALLOWED_TOOLS = frozenset({"record_care_event", "draft_task", "draft_handoff", "save_memory"})
+ALLOWED_TOOLS = frozenset(
+    {"record_care_event", "draft_task", "draft_handoff", "save_memory", "no_action"}
+)
 
-def suggest_tool(transcript: str, circle_id: str, context: dict | None = None) -> tuple[str, dict[str, object]]:
+def suggest_tool(
+    transcript: str, circle_id: str, context: dict | None = None
+) -> tuple[str, dict[str, object], bool]:
     """Route transcript to appropriate agent and return tool proposal with preview."""
     if not context:
         context = {}
 
     intent = get_intent(transcript)
 
-    base = {"circle_id": circle_id, "source": "voice", "text": transcript, "intent": intent.value}
+    base: dict[str, object] = {
+        "user_id": context.get("user_id", ""),
+        "circle_id": circle_id,
+        "speaker_id": context.get("speaker_id", ""),
+        "speaker_name": context.get("speaker_name", ""),
+        "patient_id": context.get("patient_id", ""),
+        "patient_name": context.get("patient_name", ""),
+        "role": context.get("role", ""),
+        "relationship": context.get("relationship", ""),
+        "preferred_language": context.get("preferred_language", "English"),
+        "source": "voice",
+        "text": transcript,
+        "intent": intent.value,
+    }
+    requires_confirmation = False
 
     if intent == Intent.CARE_UPDATE:
         tool = "record_care_event"
@@ -34,7 +52,10 @@ def suggest_tool(transcript: str, circle_id: str, context: dict | None = None) -
             patient_name=context.get("patient_name", ""),
             preferred_language=context.get("preferred_language", "English"),
         )
-        base["extracted_events"] = [event.model_dump() for event in result.events]
+        base["extracted_events"] = [
+            event.model_dump(mode="json") for event in result.events
+        ]
+        requires_confirmation = bool(result.events)
 
     elif intent == Intent.CATCH_UP:
         tool = "draft_handoff"
@@ -42,10 +63,10 @@ def suggest_tool(transcript: str, circle_id: str, context: dict | None = None) -
         handoff_summary: HandoffSummary = generate_handoff_summary(
             circle_id=circle_id,
             actor_id=context.get("speaker_id", ""),
-            speaker_name=context.get("speaker_name", "Family"),
-            patient_name=context.get("patient_name", "Patient"),
+            speaker_name=context.get("speaker_name") or "Family",
+            patient_name=context.get("patient_name") or "Patient",
         )
-        base["handoff_summary"] = handoff_summary.model_dump()
+        base["handoff_summary"] = handoff_summary.model_dump(mode="json")
 
     elif intent == Intent.COORDINATION:
         tool = "draft_task"
@@ -54,23 +75,37 @@ def suggest_tool(transcript: str, circle_id: str, context: dict | None = None) -
             transcript=transcript,
             circle_id=circle_id,
             actor_id=context.get("speaker_id", ""),
-            speaker_name=context.get("speaker_name", "Family"),
-            patient_name=context.get("patient_name", "Patient"),
+            speaker_name=context.get("speaker_name") or "Family",
+            patient_name=context.get("patient_name") or "Patient",
+            referenced_task_id=context.get("referenced_task_id"),
         )
-        base["coordination_suggestion"] = coord_suggestion.model_dump()
+        base["coordination_suggestion"] = coord_suggestion.model_dump(mode="json")
+        requires_confirmation = coord_suggestion.requires_confirmation
 
     elif intent == Intent.MEMORY:
         tool = "save_memory"
         assert tool in ALLOWED_TOOLS
         memory_result: MemoryExtractionResult = extract_memory(
             transcript=transcript,
-            speaker_name=context.get("speaker_name", "Family"),
-            patient_name=context.get("patient_name", "Patient"),
+            speaker_name=context.get("speaker_name") or "Family",
+            patient_name=context.get("patient_name") or "Patient",
         )
-        base["memory_extraction"] = memory_result.model_dump()
+        base["memory_extraction"] = memory_result.model_dump(mode="json")
+        base["memory_create"] = {
+            "subject_id": context.get("patient_id", ""),
+            "kind": "voice",
+            "title": memory_result.title,
+            "body": memory_result.body,
+            "approximate_year": memory_result.approximate_year,
+        }
+        requires_confirmation = True
 
     else:
-        tool = "draft_task" if "remind" in transcript.lower() or "task" in transcript.lower() else "record_care_event"
+        tool = "no_action"
         assert tool in ALLOWED_TOOLS
+        base["message"] = (
+            "I can record a care update, catch you up, coordinate a task, or save a memory. "
+            "Please tell me which you would like."
+        )
 
-    return tool, base
+    return tool, base, requires_confirmation

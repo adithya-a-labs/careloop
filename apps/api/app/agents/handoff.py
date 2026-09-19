@@ -1,15 +1,25 @@
 """Handoff Agent - generates concise care summaries from structured data."""
 
 import json
+from datetime import datetime
 from typing import Any
 
+from app.schemas.common import HandoffNarrative, HandoffSummary
 from app.services.llm import LLMService
-from app.schemas.common import HandoffSummary
 
 name = "handoff"
 allowed_tools = frozenset({"list_recent_events", "list_open_tasks", "draft_handoff"})
 
 _llm = LLMService()
+_SUMMARY_WORD_LIMIT = 22
+
+
+def _trim_summary(summary: str) -> str:
+    """Keep the spoken handoff close to the five-second product target."""
+    words = summary.split()
+    if len(words) <= _SUMMARY_WORD_LIMIT:
+        return summary.strip()
+    return " ".join(words[:_SUMMARY_WORD_LIMIT]).rstrip(".,;:") + "…"
 
 
 def _load_prompt() -> str:
@@ -27,8 +37,8 @@ def _format_events_for_prompt(events: list[dict[str, Any]]) -> list[dict[str, An
             {
                 "event_type": event.get("event_type"),
                 "event_data": event.get("event_data", {}),
-                "subject_name": event.get("subject_name", "Unknown"),
-                "reported_by_name": event.get("reported_by_name", "Unknown"),
+                "subject_name": event.get("subject", {}).get("display_name", "Unknown"),
+                "reported_by_name": event.get("reporter", {}).get("display_name", "Unknown"),
                 "occurred_at": event.get("occurred_at"),
                 "source": event.get("source"),
                 "raw_transcript": event.get("raw_transcript"),
@@ -45,22 +55,13 @@ def _format_tasks_for_prompt(tasks: list[dict[str, Any]]) -> list[dict[str, Any]
             {
                 "title": task.get("title"),
                 "description": task.get("description"),
-                "assigned_to_name": task.get("assigned_to_name"),
+                "assigned_to_name": (task.get("assignee") or {}).get("display_name"),
                 "due_at": task.get("due_at"),
                 "priority": task.get("priority"),
                 "completed_at": task.get("completed_at"),
             }
         )
     return formatted
-
-
-def _strip_extra_fields(data: list[dict[str, Any]], allowed_fields: set[str]) -> list[dict[str, Any]]:
-    """Remove extra fields not in the schema to avoid validation errors."""
-    result = []
-    for item in data:
-        filtered = {k: v for k, v in item.items() if k in allowed_fields}
-        result.append(filtered)
-    return result
 
 
 def _format_upcoming_for_prompt(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -82,7 +83,7 @@ def generate_handoff_summary(
     actor_id: str,
     speaker_name: str,
     patient_name: str,
-    since: str | None = None,
+    since: datetime | None = None,
 ) -> HandoffSummary:
     """Generate a handoff summary using the LLM."""
     from app.services.care_coordination import get_care_coordination_service
@@ -92,27 +93,9 @@ def generate_handoff_summary(
     # Get the handoff context data
     ctx = service.handoff_context(circle_id, actor_id, since)
 
-    # Enrich with profile names for the prompt
-    profiles = service.list_members(circle_id, actor_id)
-    profile_map = {p["profile_id"]: p for p in profiles}
-
-    # Enrich events with names
     events = ctx["events_since_last_seen"]
-    for event in events:
-        subject_id = event.get("subject_id")
-        reported_by = event.get("reported_by")
-        event["subject_name"] = profile_map.get(subject_id, {}).get("display_name", "Unknown")
-        event["reported_by_name"] = profile_map.get(reported_by, {}).get("display_name", "Unknown")
-
-    # Enrich tasks with names
     pending_tasks = ctx["pending_tasks"]
     completed_tasks = ctx["completed_tasks"]
-    for task in pending_tasks + completed_tasks:
-        assigned_to = task.get("assigned_to")
-        if assigned_to:
-            task["assigned_to_name"] = profile_map.get(assigned_to, {}).get("display_name", "Unknown")
-        else:
-            task["assigned_to_name"] = None
 
     # Prepare prompt input
     prompt_input = {
@@ -125,7 +108,6 @@ def generate_handoff_summary(
     }
 
     if not _llm.configured:
-        # Demo fallback
         return _generate_demo_handoff(ctx, speaker_name, patient_name)
 
     prompt = _load_prompt()
@@ -138,12 +120,18 @@ def generate_handoff_summary(
             {"role": "system", "content": prompt},
             {"role": "user", "content": json.dumps(prompt_input, ensure_ascii=False, default=str)},
         ],
-        text_format=HandoffSummary,
+        text_format=HandoffNarrative,
     )
 
     if response.output_parsed is None:
         return _generate_demo_handoff(ctx, speaker_name, patient_name)
-    return response.output_parsed
+    return HandoffSummary(
+        important=events[:3],
+        pending=pending_tasks[:3],
+        completed=completed_tasks[:3],
+        upcoming=ctx["upcoming"][:3],
+        summary=_trim_summary(response.output_parsed.summary),
+    )
 
 
 def _generate_demo_handoff(
@@ -155,49 +143,45 @@ def _generate_demo_handoff(
     completed = ctx["completed_tasks"]
     upcoming = ctx["upcoming"]
 
-    # Strip extra fields that aren't in the schema
-    event_fields = {"id", "circle_id", "subject_id", "reported_by", "event_type", "event_data", 
-                    "source", "raw_transcript", "confidence", "occurred_at", "created_at"}
-    task_fields = {"id", "circle_id", "title", "description", "created_by", "assigned_to", "status", 
-                   "priority", "due_at", "completed_at", "source_event_id", "created_at", "updated_at"}
-    upcoming_fields = {"id", "circle_id", "created_by", "title", "starts_at", "ends_at", "recurrence_rule", "created_at"}
-
-    events = _strip_extra_fields(events, event_fields)
-    pending = _strip_extra_fields(pending, task_fields)
-    completed = _strip_extra_fields(completed, task_fields)
-    upcoming = _strip_extra_fields(upcoming, upcoming_fields)
-
-    # Build summary text
-    parts = []
+    parts: list[str] = []
     if events:
         recent = events[:2]
         for e in recent:
             etype = e.get("event_type")
+            reporter = e.get("reporter", {}).get("display_name", "the Care Circle")
             if etype == "meal":
-                parts.append(f"{patient_name} ate little at {e['event_data'].get('meal', 'a meal')}")
+                parts.append(
+                    f"{reporter} shared that {patient_name} ate little at "
+                    f"{e['event_data'].get('meal', 'a meal')}"
+                )
             elif etype == "visit":
-                parts.append(f"{patient_name} had a {e['event_data'].get('visit_type', 'visit')}")
-            elif etype == "check_in":
-                parts.append(f"{patient_name}'s check-in: {e['event_data'].get('mood', 'okay')}")
+                parts.append(
+                    f"{reporter} recorded a completed "
+                    f"{e['event_data'].get('visit_type', 'visit')}"
+                )
+            else:
+                parts.append(f"{reporter} shared a {etype.replace('_', ' ')} update")
 
     if pending:
-        high_priority = [t for t in pending if t.get("priority") == "high"]
-        if high_priority:
-            task = high_priority[0]
-            assignee = task.get("assigned_to") or "someone"
-            parts.append(f"{task['title']} pending for {assignee}")
+        task = next(
+            (item for item in pending if item.get("priority") in {"high", "urgent"}),
+            pending[0],
+        )
+        assignee = (task.get("assignee") or {}).get("display_name")
+        owner_text = f" with {assignee}" if assignee else " and still needs someone"
+        parts.append(f"{task['title']} is pending{owner_text}")
 
     if not parts:
-        summary = f"No significant updates for {patient_name}."
+        summary = f"There are no new Care Circle updates for {patient_name} in this handoff window."
     else:
-        summary = ". ".join(parts) + "."
+        summary = ". ".join(parts[:3]) + "."
 
     return HandoffSummary(
         important=events[:3],
         pending=pending[:3],
         completed=completed[:3],
         upcoming=upcoming[:3],
-        summary=summary,
+        summary=_trim_summary(summary),
     )
 
 

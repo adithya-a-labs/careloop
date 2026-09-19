@@ -1,7 +1,6 @@
 """Lightweight deterministic intent router for CareLoop voice."""
 
 from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -88,6 +87,11 @@ _CARE_UPDATE_PATTERNS = (
     "thonnunnu",
     "vedana",
     "aswasamilla",
+    "ഉറക്കം",
+    "ഭക്ഷണം",
+    "മരുന്ന് കഴിച്ചു",
+    "വേദന",
+    "സുഖം",
 )
 
 _CATCH_UP_PATTERNS = (
@@ -110,6 +114,10 @@ _CATCH_UP_PATTERNS = (
     "enthokke nadannu",
     "njan poyiirunnu",
     "kurachu samayam",
+    "എന്തൊക്കെ നടന്നു",
+    "എനിക്ക് അപ്ഡേറ്റ് തരൂ",
+    "ചുരുക്കി പറയൂ",
+    "പുതിയ കാര്യങ്ങൾ എന്താണ്",
 )
 
 _COORDINATION_PATTERNS = (
@@ -128,8 +136,6 @@ _COORDINATION_PATTERNS = (
     "fetch",
     "pharmacy",
     "prescription",
-    "medicine",
-    "appointment",
     "schedule",
     "book",
     "arrange",
@@ -152,6 +158,12 @@ _COORDINATION_PATTERNS = (
     "veyandum",
     "kazhikkam",
     "prescription edukkam",
+    "ആർക്കു കഴിയും",
+    "ആർ ലഭ്യമാണ്",
+    "രാഹുലിനോട് ചോദിക്കൂ",
+    "ചോദിക്കൂ",
+    "പ്രിസ്ക്രിപ്ഷൻ എടുക്കാൻ",
+    "നാളെ ആരുണ്ട്",
 )
 
 _MEMORY_PATTERNS = (
@@ -182,6 +194,9 @@ _MEMORY_PATTERNS = (
     "munnile",
     "balyam",
     "kalyanam",
+    "എനിക്ക് ഒരു കഥ പറയാനുണ്ട്",
+    "ഞാൻ ഓർക്കുന്നു",
+    "എന്റെ ആദ്യ ജോലി",
 )
 
 

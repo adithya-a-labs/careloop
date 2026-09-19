@@ -6,6 +6,7 @@ import {
   updateTask,
   createTask,
   listAvailability,
+  routeVoiceTurn,
   DEMO_CIRCLE_ID,
   DEMO_RAHUL_ID,
   PROFILE_UUIDS,
@@ -15,7 +16,6 @@ import {
 } from '../lib/api';
 import { subscribeToTasks, removeRealtimeChannel } from '../lib/supabase';
 import { useDemoProfile } from '../features/demo/DemoContext';
-import { TASKS, type DemoTask } from '../lib/mock-data';
 
 type TabType = 'All' | 'My Tasks' | 'Assigned' | 'Done';
 
@@ -39,7 +39,7 @@ const itemVariants: Variants = {
 };
 
 export function TasksPage() {
-  const { activeProfile } = useDemoProfile();
+  const { activeProfile, authStatus } = useDemoProfile();
   const [tasks, setTasks] = useState<ApiTask[]>([]);
   const [availability, setAvailability] = useState<MemberAvailability[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('All');
@@ -48,107 +48,96 @@ export function TasksPage() {
   const [newTaskDay, setNewTaskDay] = useState<'Today' | 'Tomorrow'>('Today');
   const [heroAssignedId, setHeroAssignedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
 
   const activeProfileUuid = PROFILE_UUIDS[activeProfile.id];
   const activeProfileName = activeProfile.displayName;
 
   // Load real tasks and availability
   const loadTasksData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const [fetchedTasks, fetchedAvail] = await Promise.all([
-        listTasks(activeProfile.id).catch(() => []),
-        listAvailability(activeProfile.id).catch(() => []),
+        listTasks(activeProfile.id),
+        listAvailability(activeProfile.id),
       ]);
-
-      if (fetchedTasks && fetchedTasks.length > 0) {
-        setTasks(fetchedTasks);
-      } else {
-        // Fallback to mock data if no tasks returned
-        const mappedMock: ApiTask[] = TASKS.map((t) => ({
-          id: t.id,
-          circle_id: DEMO_CIRCLE_ID,
-          title: t.title,
-          description: null,
-          created_by: activeProfileUuid,
-          assigned_to: t.assignee === 'Rahul' ? DEMO_RAHUL_ID : null,
-          status: t.status === 'done' ? 'completed' : 'pending',
-          priority: t.isUrgent ? 'high' : 'medium',
-          due_at: t.dueLabel.includes('Tomorrow') ? new Date(Date.now() + 86400000).toISOString() : new Date().toISOString(),
-          completed_at: t.status === 'done' ? new Date().toISOString() : null,
-          source_event_id: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }));
-        setTasks(mappedMock);
-      }
-
-      if (fetchedAvail) setAvailability(fetchedAvail);
-    } catch (err) {
-      console.warn('TasksPage using fallback data:', err);
+      setTasks(fetchedTasks);
+      setAvailability(fetchedAvail);
+    } catch (reason) {
+      setTasks([]);
+      setAvailability([]);
+      setError(reason instanceof Error ? reason.message : 'CareLoop could not load tasks.');
     } finally {
       setLoading(false);
     }
-  }, [activeProfile.id, activeProfileUuid]);
+  }, [activeProfile.id]);
 
   useEffect(() => {
-    loadTasksData();
-
-    // Subscribe to realtime task updates
-    const taskSub = subscribeToTasks(DEMO_CIRCLE_ID, (payload) => {
-      if (payload.eventType === 'INSERT') {
-        const newTask = payload.new as unknown as ApiTask;
-        setTasks((prev) => [newTask, ...prev.filter((t) => t.id !== newTask.id)]);
-      } else if (payload.eventType === 'UPDATE') {
-        const updatedTask = payload.new as unknown as ApiTask;
-        setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
-      } else if (payload.eventType === 'DELETE') {
-        const deletedTask = payload.old as unknown as ApiTask;
-        setTasks((prev) => prev.filter((t) => t.id !== deletedTask.id));
-      }
-    });
+    let cancelled = false;
+    let taskSub: ReturnType<typeof subscribeToTasks> = null;
+    setTasks([]);
+    setAvailability([]);
+    setHeroAssignedId(null);
+    if (authStatus !== 'authenticated') {
+      setLoading(authStatus === 'loading');
+      return;
+    }
+    void loadTasksData()
+      .then(() => {
+        if (cancelled) return;
+        taskSub = subscribeToTasks(DEMO_CIRCLE_ID, (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const deletedTask = payload.old as unknown as ApiTask;
+            setTasks((prev) => prev.filter((task) => task.id !== deletedTask.id));
+            return;
+          }
+          const changed = payload.new as unknown as ApiTask;
+          if (!changed.id) return;
+          setTasks((prev) => [changed, ...prev.filter((task) => task.id !== changed.id)]);
+        });
+      });
 
     return () => {
-      removeRealtimeChannel(taskSub);
+      cancelled = true;
+      void removeRealtimeChannel(taskSub);
     };
-  }, [loadTasksData]);
+  }, [activeProfile.id, authStatus, loadTasksData]);
 
-  // Toggle completion with optimistic UI and real API PATCH
   const toggleTaskDone = async (task: ApiTask) => {
     const isDone = task.status === 'completed' || task.status === 'done';
     const newStatus = isDone ? 'pending' : 'completed';
 
-    // Optimistic UI
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === task.id
-          ? { ...t, status: newStatus, completed_at: isDone ? null : new Date().toISOString() }
-          : t,
-      ),
-    );
-
+    setSavingTaskId(task.id);
+    setError(null);
     try {
-      await updateTask(task.id, { status: newStatus }, activeProfile.id);
-    } catch (err) {
-      console.error('Failed to update task status:', err);
-      // Rollback
-      loadTasksData();
+      const persisted = await updateTask(task.id, { status: newStatus }, activeProfile.id);
+      setTasks((prev) => [persisted, ...prev.filter((item) => item.id !== persisted.id)]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'CareLoop could not update the task.');
+    } finally {
+      setSavingTaskId(null);
     }
   };
 
   // Assign task to Rahul: "Ask Rahul"
   const handleAskRahul = async (taskId: string) => {
-    setHeroAssignedId(taskId);
-
-    // Optimistic UI
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, assigned_to: DEMO_RAHUL_ID } : t)),
-    );
-
+    setSavingTaskId(taskId);
+    setError(null);
     try {
-      await updateTask(taskId, { assigned_to: DEMO_RAHUL_ID }, activeProfile.id);
-    } catch (err) {
-      console.error('Failed to assign task to Rahul:', err);
-      loadTasksData();
+      const preview = await routeVoiceTurn('Ask Rahul.', activeProfile, taskId);
+      const suggestion = preview.preview.coordination_suggestion;
+      if (suggestion?.action !== 'assign_task' || suggestion.assignee_id !== DEMO_RAHUL_ID) {
+        throw new Error('CareLoop could not confirm Rahul for this task.');
+      }
+      const persisted = await updateTask(taskId, { assigned_to: DEMO_RAHUL_ID }, activeProfile.id);
+      setTasks((prev) => [persisted, ...prev.filter((task) => task.id !== persisted.id)]);
+      setHeroAssignedId(taskId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'CareLoop could not assign the task.');
+    } finally {
+      setSavingTaskId(null);
     }
   };
 
@@ -161,42 +150,22 @@ export function TasksPage() {
       ? new Date().toISOString()
       : new Date(Date.now() + 86400000).toISOString();
 
-    const tempId = `task-${Date.now()}`;
-    const optimisticTask: ApiTask = {
-      id: tempId,
-      circle_id: DEMO_CIRCLE_ID,
-      title: newTaskTitle.trim(),
-      description: null,
-      created_by: activeProfileUuid,
-      assigned_to: null,
-      status: 'pending',
-      priority: 'medium',
-      due_at: dueAt,
-      completed_at: null,
-      source_event_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    setTasks((prev) => [optimisticTask, ...prev]);
-    setNewTaskTitle('');
-    setIsAddingTask(false);
-
+    setError(null);
     try {
       const created = await createTask(
         {
-          title: optimisticTask.title,
+          title: newTaskTitle.trim(),
           due_at: dueAt,
           priority: 'medium',
           status: 'pending',
         },
         activeProfile.id,
       );
-      if (created) {
-        setTasks((prev) => [created, ...prev.filter((t) => t.id !== tempId)]);
-      }
-    } catch (err) {
-      console.error('Failed to create task on backend:', err);
+      setTasks((prev) => [created, ...prev.filter((task) => task.id !== created.id)]);
+      setNewTaskTitle('');
+      setIsAddingTask(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'CareLoop could not create the task.');
     }
   };
 
@@ -219,14 +188,17 @@ export function TasksPage() {
     const due = new Date(task.due_at);
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    return due.getDate() === tomorrow.getDate() && due.getMonth() === tomorrow.getMonth();
+    return due.toDateString() === tomorrow.toDateString();
   };
 
   const todayTasks = filteredTasks.filter((t) => !isTomorrow(t));
   const tomorrowTasks = filteredTasks.filter((t) => isTomorrow(t));
 
-  const rahulAvail = availability.find((a) => a.profile_id === DEMO_RAHUL_ID);
-  const rahulNote = rahulAvail?.note || 'Available tomorrow afternoon';
+  const rahulIsAvailableFor = (task: ApiTask) => availability.find((slot) => {
+    if (slot.profile_id !== DEMO_RAHUL_ID || !task.due_at) return false;
+    const due = new Date(task.due_at).getTime();
+    return due >= new Date(slot.starts_at).getTime() && due <= new Date(slot.ends_at).getTime();
+  });
 
   const tabs: TabType[] = ['All', 'My Tasks', 'Assigned', 'Done'];
 
@@ -244,6 +216,9 @@ export function TasksPage() {
           Clear family coordination without the group-chat scramble.
         </p>
       </header>
+
+      {loading && <p className="timeline-ghost-hint">Loading real Care Circle tasks…</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
 
       {/* Filter tabs */}
       <div className="task-tabs" role="tablist" aria-label="Task filters">
@@ -287,7 +262,11 @@ export function TasksPage() {
             <div style={{ fontWeight: 800, color: 'var(--care-ink)' }}>
               Add a new family care task
             </div>
+            <label htmlFor="newTaskTitle" style={{ fontWeight: 700, color: 'var(--care-ink)' }}>
+              Task
+            </label>
             <input
+              id="newTaskTitle"
               type="text"
               placeholder="What needs to be done? e.g. Pick up eye drops"
               value={newTaskTitle}
@@ -301,7 +280,7 @@ export function TasksPage() {
                 fontSize: '0.95rem',
               }}
             />
-            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--care-muted)', fontWeight: 700 }}>
                 Due:
               </span>
@@ -425,6 +404,7 @@ export function TasksPage() {
             const assigneeName = task.assigned_to ? UUID_TO_NAME[task.assigned_to] || 'Assigned' : null;
             const isRahulHero = heroAssignedId === task.id || task.assigned_to === DEMO_RAHUL_ID;
             const isUnassigned = !task.assigned_to && !isDone;
+            const rahulSlot = rahulIsAvailableFor(task);
 
             return (
               <motion.div
@@ -451,9 +431,10 @@ export function TasksPage() {
                     onClick={() => toggleTaskDone(task)}
                     aria-label={isDone ? 'Mark task as not done' : 'Mark task as done'}
                     className={`task-checkbox-btn ${isDone ? 'done' : ''}`}
+                    disabled={savingTaskId === task.id}
                     style={{
-                      width: '30px',
-                      height: '30px',
+                      width: '44px',
+                      height: '44px',
                       borderRadius: '50%',
                       border: isDone ? '2px solid var(--care-success)' : '2px solid var(--care-peach)',
                       backgroundColor: isDone ? 'var(--care-success)' : 'transparent',
@@ -541,7 +522,7 @@ export function TasksPage() {
                 </div>
 
                 {/* Hero coordination row for unassigned tasks */}
-                {isUnassigned && (
+                {isUnassigned && rahulSlot && (
                   <div
                     style={{
                       display: 'flex',
@@ -562,7 +543,7 @@ export function TasksPage() {
                         Rahul is available:
                       </span>
                       <span style={{ fontSize: '0.78rem', color: 'var(--care-muted)', fontWeight: 600 }}>
-                        {rahulNote}
+                        {rahulSlot.note ?? `${new Date(rahulSlot.starts_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}–${new Date(rahulSlot.ends_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
                       </span>
                     </div>
 
@@ -570,6 +551,7 @@ export function TasksPage() {
                       type="button"
                       className="primary-button compact"
                       onClick={() => handleAskRahul(task.id)}
+                      disabled={savingTaskId === task.id}
                       style={{
                         padding: '0.35rem 0.85rem',
                         fontSize: '0.8rem',
@@ -577,7 +559,7 @@ export function TasksPage() {
                       }}
                     >
                       <UserCheck size={14} />
-                      <span>Ask Rahul</span>
+                      <span>{savingTaskId === task.id ? 'Assigning…' : 'Ask Rahul'}</span>
                     </button>
                   </div>
                 )}
@@ -686,9 +668,10 @@ export function TasksPage() {
                   onClick={() => toggleTaskDone(task)}
                   aria-label={isDone ? 'Mark task as not done' : 'Mark task as done'}
                   className={`task-checkbox-btn ${isDone ? 'done' : ''}`}
+                  disabled={savingTaskId === task.id}
                   style={{
-                    width: '30px',
-                    height: '30px',
+                    width: '44px',
+                    height: '44px',
                     borderRadius: '50%',
                     border: isDone ? '2px solid var(--care-success)' : '2px solid var(--care-peach)',
                     backgroundColor: isDone ? 'var(--care-success)' : 'transparent',
@@ -782,7 +765,7 @@ export function TasksPage() {
       {/* Floating '+ Add a task' button at bottom */}
       <motion.button
         type="button"
-        className="task-floating-btn"
+        className="task-fab"
         whileHover={{ scale: 1.04, translateY: -2 }}
         whileTap={{ scale: 0.96 }}
         onClick={() => setIsAddingTask((prev) => !prev)}

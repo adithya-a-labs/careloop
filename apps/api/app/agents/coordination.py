@@ -1,13 +1,11 @@
 """Coordination Agent - helps coordinate care tasks using structured tool proposals."""
 
 import json
-import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID
 
-from app.services.llm import LLMService
 from app.schemas.common import CoordinationSuggestion
+from app.services.llm import LLMService
 
 name = "coordination"
 allowed_tools = frozenset({"list_availability", "draft_task", "suggest_assignee"})
@@ -33,14 +31,26 @@ def _extract_name_references(transcript: str, members: list[dict[str, Any]]) -> 
             first_name = name.split()[0]
             if first_name not in name_to_id:
                 name_to_id[first_name] = member["profile_id"]
+            if first_name == "rahul":
+                name_to_id["രാഹുൽ"] = member["profile_id"]
     return name_to_id
 
 
 def _resolve_task_reference(
-    transcript: str, tasks: list[dict[str, Any]], history: list[dict[str, Any]] | None
+    transcript: str,
+    tasks: list[dict[str, Any]],
+    history: list[dict[str, Any]] | None,
+    referenced_task_id: str | None = None,
 ) -> str | None:
     """Resolve task reference from transcript or conversation history."""
     lowered = transcript.lower()
+
+    if referenced_task_id and any(
+        str(task.get("id")) == referenced_task_id
+        and task.get("status") in ("pending", "open", "in_progress")
+        for task in tasks
+    ):
+        return referenced_task_id
 
     # Explicit task title mention
     for task in tasks:
@@ -89,6 +99,7 @@ def coordinate(
     speaker_name: str,
     patient_name: str,
     conversation_history: list[dict[str, Any]] | None = None,
+    referenced_task_id: str | None = None,
 ) -> CoordinationSuggestion:
     """Generate a coordination suggestion using LLM with tool access."""
     from app.services.care_coordination import get_care_coordination_service
@@ -140,8 +151,25 @@ def coordinate(
         ],
     }
 
-    if not _llm.configured:
-        return _coordinate_demo(transcript, context, conversation_history)
+    deterministic = _coordinate_demo(
+        transcript, context, conversation_history, referenced_task_id
+    )
+    lowered = transcript.lower()
+    if not _llm.configured or any(
+        phrase in lowered
+        for phrase in (
+            "who can",
+            "who is available",
+            "who's available",
+            "ask ",
+            "assign",
+            "tell ",
+            "ആർക്കു കഴിയും",
+            "ആർ ലഭ്യമാണ്",
+            "ചോദിക്കൂ",
+        )
+    ):
+        return deterministic
 
     prompt = _load_prompt()
 
@@ -152,6 +180,7 @@ def coordinate(
         "transcript": transcript,
         "context": context,
         "conversation_history": conversation_history or [],
+        "referenced_task_id": referenced_task_id,
     }
 
     response = client.responses.parse(
@@ -164,7 +193,7 @@ def coordinate(
     )
 
     if response.output_parsed is None:
-        return _coordinate_demo(transcript, context, conversation_history)
+        return deterministic
     return response.output_parsed
 
 
@@ -172,6 +201,7 @@ def _coordinate_demo(
     transcript: str,
     context: dict[str, Any],
     history: list[dict[str, Any]] | None = None,
+    referenced_task_id: str | None = None,
 ) -> CoordinationSuggestion:
     """Demo fallback for coordination without LLM."""
     members = context["members"]
@@ -180,10 +210,21 @@ def _coordinate_demo(
     lowered = transcript.lower()
 
     name_to_id = _extract_name_references(transcript, members)
-    task_id = _resolve_task_reference(transcript, tasks, history)
+    task_id = _resolve_task_reference(
+        transcript, tasks, history, referenced_task_id
+    )
 
     # "Who can pick up the prescription tomorrow?"
-    if "who can" in lowered or "who is available" in lowered or "who's available" in lowered:
+    if any(
+        phrase in lowered
+        for phrase in (
+            "who can",
+            "who is available",
+            "who's available",
+            "ആർക്കു കഴിയും",
+            "ആർ ലഭ്യമാണ്",
+        )
+    ):
         # Find prescription task
         prescription_task = None
         for task in tasks:
@@ -192,21 +233,33 @@ def _coordinate_demo(
                 break
 
         if prescription_task:
-            # Check availability for tomorrow
-            tomorrow = (datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).isoformat()
-            available_members = []
+            due_at = prescription_task.get("due_at")
+            target = (
+                datetime.fromisoformat(due_at)
+                if due_at
+                else datetime.now(UTC) + timedelta(days=1)
+            )
+            available_members: list[dict[str, Any]] = []
             for avail in availability:
-                if avail["starts_at"] <= tomorrow < avail["ends_at"]:
+                starts_at = datetime.fromisoformat(avail["starts_at"])
+                ends_at = datetime.fromisoformat(avail["ends_at"])
+                if starts_at <= target <= ends_at:
                     member = next((m for m in members if m["profile_id"] == avail["profile_id"]), None)
                     if member:
-                        available_members.append(member["display_name"])
+                        available_members.append(member)
 
             if available_members:
+                names = ", ".join(member["display_name"] for member in available_members)
+                only_assignee = (
+                    available_members[0]["profile_id"]
+                    if len(available_members) == 1
+                    else None
+                )
                 return CoordinationSuggestion(
                     action="suggest_assignee",
                     task_id=prescription_task["id"],
-                    assignee_id=None,
-                    message=f"Available for prescription pickup tomorrow: {', '.join(available_members)}. Who should I assign?",
+                    assignee_id=only_assignee,
+                    message=f"{names} is available when the prescription pickup is due tomorrow.",
                     requires_confirmation=False,
                 )
             else:
@@ -214,12 +267,12 @@ def _coordinate_demo(
                     action="list_availability",
                     task_id=prescription_task["id"],
                     assignee_id=None,
-                    message=f"Prescription pickup needed but no one shows availability for tomorrow.",
+                    message="Prescription pickup needed but no one shows availability for tomorrow.",
                     requires_confirmation=False,
                 )
 
     # "Ask Rahul" / "Assign to Rahul"
-    if "ask " in lowered or "assign" in lowered or "tell " in lowered:
+    if any(phrase in lowered for phrase in ("ask ", "assign", "tell ", "ചോദിക്കൂ")):
         # Extract name after "ask"/"assign to"/"tell"
         assignee_id = None
         for name, pid in name_to_id.items():
@@ -251,7 +304,7 @@ def _coordinate_demo(
                 action="complete_task",
                 task_id=task_id,
                 assignee_id=None,
-                message=f"Mark task as completed?",
+                message="Mark task as completed?",
                 requires_confirmation=True,
             )
         else:

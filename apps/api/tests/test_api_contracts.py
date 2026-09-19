@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agents.intent_router import Intent, route_intent
 from app.core.config import settings
 from app.main import app
 from app.services.care_coordination import (
@@ -246,3 +247,118 @@ def test_real_mode_requires_bearer_token(monkeypatch: pytest.MonkeyPatch) -> Non
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "unauthorized"
     get_care_coordination_service.cache_clear()
+
+
+def _voice_turn_payload(transcript: str, **updates: str | None) -> dict[str, str | None]:
+    payload: dict[str, str | None] = {
+        "user_id": DEMO_MAYA_ID,
+        "circle_id": DEMO_CIRCLE_ID,
+        "speaker_id": DEMO_MAYA_ID,
+        "speaker_name": "Maya",
+        "patient_id": DEMO_AMMA_ID,
+        "role": "family",
+        "relationship": "daughter",
+        "patient_name": "Amma",
+        "preferred_language": "English",
+        "transcript": transcript,
+        "referenced_task_id": None,
+    }
+    payload.update(updates)
+    return payload
+
+
+def test_routed_handoff_uses_real_context(demo_client: TestClient) -> None:
+    response = demo_client.post(
+        "/api/v1/voice/turn",
+        json=_voice_turn_payload("Catch me up."),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tool"] == "draft_handoff"
+    assert body["requires_confirmation"] is False
+    summary = body["preview"]["handoff_summary"]
+    assert summary["summary"]
+    assert len(summary["summary"].split()) <= 22
+    assert summary["important"][0]["reporter"]["display_name"]
+    assert summary["important"][0]["occurred_at"]
+    assert summary["pending"]
+    assert summary["upcoming"]
+
+
+def test_routed_coordination_suggests_and_assigns_rahul(demo_client: TestClient) -> None:
+    suggestion_response = demo_client.post(
+        "/api/v1/voice/turn",
+        json=_voice_turn_payload("Who can pick up the prescription tomorrow?"),
+    )
+
+    assert suggestion_response.status_code == 200
+    suggestion = suggestion_response.json()["preview"]["coordination_suggestion"]
+    assert suggestion["action"] == "suggest_assignee"
+    assert suggestion["assignee_id"] == DEMO_RAHUL_ID
+    assert "Rahul" in suggestion["message"]
+
+    assignment_response = demo_client.post(
+        "/api/v1/voice/turn",
+        json=_voice_turn_payload(
+            "Ask Rahul.", referenced_task_id=suggestion["task_id"]
+        ),
+    )
+    assert assignment_response.status_code == 200
+    assignment = assignment_response.json()["preview"]["coordination_suggestion"]
+    assert assignment == {
+        "action": "assign_task",
+        "task_id": suggestion["task_id"],
+        "assignee_id": DEMO_RAHUL_ID,
+        "message": "Assign task to Rahul?",
+        "requires_confirmation": True,
+    }
+
+    persisted = demo_client.patch(
+        f"/api/v1/tasks/{suggestion['task_id']}",
+        json={"assigned_to": DEMO_RAHUL_ID},
+    )
+    assert persisted.status_code == 200
+    assert persisted.json()["assigned_to"] == DEMO_RAHUL_ID
+
+
+def test_routed_memory_adapts_to_memory_create(demo_client: TestClient) -> None:
+    response = demo_client.post(
+        "/api/v1/voice/turn",
+        json=_voice_turn_payload(
+            "I want to tell you about my first job in Kochi in 1978.",
+            user_id=DEMO_AMMA_ID,
+            speaker_id=DEMO_AMMA_ID,
+            speaker_name="Amma",
+            role="patient",
+            relationship="self",
+        ),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tool"] == "save_memory"
+    assert body["requires_confirmation"] is True
+    create_payload = body["preview"]["memory_create"]
+    assert create_payload["subject_id"] == DEMO_AMMA_ID
+    assert create_payload["kind"] == "voice"
+    assert create_payload["approximate_year"] == 1978
+
+    created = demo_client.post(
+        f"/api/v1/circles/{DEMO_CIRCLE_ID}/memories",
+        json=create_payload,
+    )
+    assert created.status_code == 201
+    assert created.json()["title"] == create_payload["title"]
+
+
+@pytest.mark.parametrize(
+    ("transcript", "expected"),
+    [
+        ("എന്തൊക്കെ നടന്നു? ചുരുക്കി പറയൂ", Intent.CATCH_UP),
+        ("നാളെ പ്രിസ്ക്രിപ്ഷൻ എടുക്കാൻ ആർക്കു കഴിയും?", Intent.COORDINATION),
+        ("ഇന്ന് ഉറക്കം നന്നായില്ല", Intent.CARE_UPDATE),
+    ],
+)
+def test_native_malayalam_intent_fallback(transcript: str, expected: Intent) -> None:
+    assert route_intent(transcript).intent == expected

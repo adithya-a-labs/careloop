@@ -3,8 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.agents.care_event import extract_events
-from app.core.safety import enforce_coordination_scope
 from app.api.dependencies import as_http_exception, get_actor_id
+from app.core.safety import enforce_coordination_scope
 from app.schemas.common import (
     CareEventExtractionResult,
     LiveSessionCreate,
@@ -20,11 +20,25 @@ from app.voice.session import plan_voice_turn
 router = APIRouter(prefix="/voice", tags=["voice"])
 
 @router.post("/turn", response_model=ToolResult)
-def voice_turn(payload: VoiceTurn) -> ToolResult:
+def voice_turn(
+    payload: VoiceTurn,
+    actor_id: Annotated[str, Depends(get_actor_id)],
+) -> ToolResult:
     try:
         enforce_coordination_scope(payload.transcript)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+    service = get_care_coordination_service()
+    context_actor_id = actor_id
+    if service.uses_supabase:
+        if payload.user_id != actor_id or payload.speaker_id != actor_id:
+            raise HTTPException(status_code=403, detail="Voice context must match the signed-in user.")
+    else:
+        context_actor_id = payload.speaker_id
+    try:
+        service.assert_voice_context(payload.circle_id, context_actor_id, payload.patient_id)
+    except ServiceError as exc:
+        raise as_http_exception(exc) from exc
     return plan_voice_turn(payload)
 
 @router.post("/extract", response_model=CareEventExtractionResult)
