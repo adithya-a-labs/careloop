@@ -64,6 +64,23 @@ class LLMService:
                     **shared,
                 )
             )
+        # Mood extraction for explicit feelings
+        if any(phrase in lowered for phrase in ("feeling", "feel ", "felt ")) and any(
+            word in lowered for word in ("lonely", "sad", "happy", "anxious", "worried", "depressed", "down", "upset", "good", "great", "okay", "fine", "well")
+        ):
+            valence = "neutral"
+            if any(word in lowered for word in ("lonely", "sad", "anxious", "worried", "depressed", "down", "upset")):
+                valence = "negative"
+            elif any(word in lowered for word in ("happy", "good", "great", "well")):
+                valence = "positive"
+            events.append(
+                ExtractedCareEvent(
+                    type="mood",
+                    data={"valence": valence, "note": transcript},
+                    confidence=0.85,
+                    **shared,
+                )
+            )
 
         return CareEventExtractionResult(events=events)
     
@@ -116,4 +133,97 @@ class LLMService:
 
         if response.output_parsed is None:
             return CareEventExtractionResult(events=[])
+        return response.output_parsed
+
+    def generate_handoff_summary(
+        self,
+        events: list[dict[str, Any]],
+        pending_tasks: list[dict[str, Any]],
+        completed_tasks: list[dict[str, Any]],
+        upcoming: list[dict[str, Any]],
+        speaker_name: str,
+        patient_name: str,
+    ) -> Any:
+        """Generate handoff summary via LLM."""
+        from app.schemas.common import HandoffSummary
+
+        if not self.configured:
+            return None
+
+        prompt = self._load_prompt("handoff_summary")
+        client = self._get_client()
+
+        response = client.responses.parse(
+            model="gpt-5.6-luna",
+            input=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": json.dumps({
+                    "events_since_last_seen": events,
+                    "pending_tasks": pending_tasks,
+                    "completed_tasks": completed_tasks,
+                    "upcoming": upcoming,
+                    "speaker_name": speaker_name,
+                    "patient_name": patient_name,
+                }, ensure_ascii=False, default=str)},
+            ],
+            text_format=HandoffSummary,
+        )
+        return response.output_parsed
+
+    def coordinate(
+        self,
+        transcript: str,
+        context: dict[str, Any],
+        conversation_history: list[dict[str, Any]] | None = None,
+    ) -> Any:
+        """Generate coordination suggestion via LLM."""
+        from app.schemas.common import CoordinationSuggestion
+
+        if not self.configured:
+            return None
+
+        prompt = self._load_prompt("coordination")
+        client = self._get_client()
+
+        response = client.responses.parse(
+            model="gpt-5.6-luna",
+            input=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": json.dumps({
+                    "transcript": transcript,
+                    "context": context,
+                    "conversation_history": conversation_history or [],
+                }, ensure_ascii=False, default=str)},
+            ],
+            text_format=CoordinationSuggestion,
+        )
+        return response.output_parsed
+
+    def extract_memory(
+        self,
+        transcript: str,
+        speaker_name: str,
+        patient_name: str,
+    ) -> Any:
+        """Extract structured memory via LLM."""
+        from app.schemas.common import MemoryExtractionResult
+
+        if not self.configured:
+            return None
+
+        prompt = self._load_prompt("memory_extraction")
+        client = self._get_client()
+
+        response = client.responses.parse(
+            model="gpt-5.6-luna",
+            input=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": json.dumps({
+                    "transcript": transcript,
+                    "speaker_name": speaker_name,
+                    "patient_name": patient_name,
+                }, ensure_ascii=False)},
+            ],
+            text_format=MemoryExtractionResult,
+        )
         return response.output_parsed
