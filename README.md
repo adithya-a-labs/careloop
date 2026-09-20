@@ -252,7 +252,8 @@ erDiagram
 | Web                     | React 18, TypeScript 5.7, Vite 6, React Router 7                                      |
 | Interaction and visuals | Framer Motion 13, Lucide React, repository-owned CSS design tokens                    |
 | API                     | Python 3.11+, FastAPI, Pydantic Settings, Uvicorn, HTTPX                              |
-| AI and voice            | OpenAI `gpt-live-1` over WebRTC; Responses API structured outputs with `gpt-5.6-luna` |
+| AI — live voice         | OpenAI `gpt-live-1` over WebRTC for speech input, speech output, and live transcripts |
+| AI — structured flows   | OpenAI Responses API with `gpt-5.6-luna` for care-event extraction, handoffs, coordination, and memory extraction |
 | Data                    | Supabase Postgres, Auth, Row Level Security, Realtime                                 |
 | Tooling                 | pnpm 9 workspace, TypeScript, Vitest, Pytest, Ruff, Supabase CLI                      |
 | Packaging               | Dockerfiles for web/API and a local Docker Compose definition                         |
@@ -261,20 +262,32 @@ erDiagram
 
 ### AI inside CareLoop
 
-OpenAI is behind the FastAPI boundary. GPT Live provides the browser voice session and transcript; the Responses API produces typed care-event extraction, short handoff narratives, coordination suggestions, and memory extraction. The deterministic intent router and named specialists constrain what the model can request. Models receive no arbitrary SQL or code-execution capability.
+OpenAI is behind the FastAPI boundary. The model identifiers are literal values in the current implementation; [`.env.example`](.env.example) configures the API key but does not override either model.
+
+| Purpose | Provider | Model |
+| --- | --- | --- |
+| Realtime voice, speech input/output, and live transcript | OpenAI | `gpt-live-1` |
+| Care-event extraction | OpenAI | `gpt-5.6-luna` |
+| Handoff summary | OpenAI | `gpt-5.6-luna` |
+| Coordination suggestions | OpenAI | `gpt-5.6-luna` |
+| Memory extraction | OpenAI | `gpt-5.6-luna` |
+| Grounded context queries and intent routing | CareLoop deterministic services | No model configured |
+
+`gpt-live-1` handles the live audio session and transcripts; CareLoop does not configure separate STT or TTS model IDs. `gpt-5.6-luna` serves all four Responses API structured-output flows listed above. The deterministic intent router and named specialists constrain what a model can request, and models receive no arbitrary SQL or code-execution capability.
 
 CareLoop also remains demonstrable without provider credentials: deterministic fallbacks cover the fixed voice update, grounded handoff, prescription coordination, and memory flow.
 
-### AI used to build CareLoop
+### AI-assisted development
 
-The project used isolated Git worktrees and feature branches with human-controlled integration:
+- **Codex**
+- **Antigravity**
+- **OpenCode**
 
-- **Codex:** repository foundation plus backend, data, architecture, debugging, tests, reproducibility, documentation, and demo hardening.
-- **Antigravity:** frontend experience, design-system application, responsive polish, and role-aware UI refinement.
-- **OpenCode:** voice and intelligence flows, including extraction, handoff, and coordination work.
-- **Adithya A:** product direction, ownership boundaries, merges, conflict resolution, review, integration, and final validation.
+### Human direction & integration
 
-The workflow emphasized isolated ownership, explicit review, and tests after integration; it was not treated as autonomous, unreviewed generation.
+- **Adithya A** — product direction, architecture decisions, decomposition, agent ownership, integration, merges, conflict resolution, review, testing, demo design, and final validation.
+
+AI accelerated implementation across isolated worktrees and feature branches. Architecture, product decisions, integration, and final engineering ownership remained human-directed.
 
 ## Screenshots
 
