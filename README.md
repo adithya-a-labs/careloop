@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <code>[Add Live Demo URL]</code> · <a href="https://drive.google.com/file/d/1oj9YIp_1nmelZRLYtAxHtW86W8iE4LFV/view?usp=sharing"><strong>▶ Watch the demo video</strong></a>
+  <code></code> · <a href="https://drive.google.com/file/d/1oj9YIp_1nmelZRLYtAxHtW86W8iE4LFV/view?usp=sharing"><strong>▶ Watch the demo video</strong></a>
 </p>
 
 > [!IMPORTANT]
