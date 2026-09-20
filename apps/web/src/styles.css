@@ -36,6 +36,22 @@ button { color: var(--care-ink); }
   text-align: center; padding: 2rem;
   background: radial-gradient(circle at 50% 15%, var(--care-cream), transparent 32%), var(--care-canvas);
 }
+.demo-bootstrap {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: var(--care-ink);
+  background: radial-gradient(circle at 50% 35%, var(--care-cream), transparent 30%), var(--care-canvas);
+  text-align: center;
+}
+
+.demo-bootstrap svg { color: var(--care-coral); }
+.demo-bootstrap strong { font-size: 1.35rem; }
+.demo-bootstrap span { color: var(--care-muted); }
+
 .welcome > p:not(.eyebrow) { max-width: 590px; color: var(--care-muted); font-size: 1.1rem; }
 .sun-orbit {
   width: 88px; height: 88px; border-radius: 30px; display: grid; place-items: center;

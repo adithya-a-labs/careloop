@@ -7,22 +7,14 @@ import { TimelinePage } from '../pages/TimelinePage';
 import { TasksPage } from '../pages/TasksPage';
 import { MemoryBoxPage } from '../pages/MemoryBoxPage';
 import { CareCirclePage } from '../pages/CareCirclePage';
-import {
-  WelcomePage, CreateCirclePage, JoinCirclePage,
-  ProfileSetupPage, AgePreferencesPage,
-  HealthWellbeingPage, SettingsPage,
-} from '../pages';
+import { HealthWellbeingPage, SettingsPage } from '../pages';
 
 export function App() {
   return (
     <DemoProvider>
       <Routes>
-        <Route path="/" element={<WelcomePage />} />
-        <Route path="/create-circle" element={<CreateCirclePage />} />
-        <Route path="/join-circle" element={<JoinCirclePage />} />
-        <Route path="/profile" element={<ProfileSetupPage />} />
-        <Route path="/preferences" element={<AgePreferencesPage />} />
         <Route element={<AppShell />}>
+          <Route path="/" element={<RoleAwareHomePage />} />
           <Route path="/home" element={<RoleAwareHomePage />} />
           <Route path="/family" element={<RoleAwareHomePage />} />
           <Route path="/voice" element={<VoicePage />} />

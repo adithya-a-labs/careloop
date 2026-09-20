@@ -6,18 +6,20 @@ import { PROFILE_LIST } from '../../lib/mock-data';
 import { getHomeRoute } from '../../features/demo/role-experience';
 
 export function ProfileSwitcher() {
-  const { activeProfile, setActiveProfile } = useDemoProfile();
+  const { activeProfile, setActiveProfile, authStatus } = useDemoProfile();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleSwitch = (profileId: typeof activeProfile.id) => {
-    const profile = PROFILE_LIST.find(p => p.id === profileId);
+  const handleSwitch = async (profileId: typeof activeProfile.id) => {
+    const profile = PROFILE_LIST.find((p) => p.id === profileId);
     if (!profile) return;
 
-    setActiveProfile(profileId);
+    const switched = await setActiveProfile(profileId);
+    if (!switched) return;
 
     // Auto-navigate to the correct home page when switching profiles
-    const isOnHomePage = location.pathname === '/home' || location.pathname === '/family';
+    const isOnHomePage =
+      location.pathname === '/' || location.pathname === '/home' || location.pathname === '/family';
     if (isOnHomePage) {
       navigate(getHomeRoute(profile));
     }
@@ -35,6 +37,7 @@ export function ProfileSwitcher() {
               type="button"
               className={`profile-pill ${isActive ? 'active' : ''}`}
               onClick={() => handleSwitch(profile.id)}
+              disabled={authStatus === 'loading'}
               aria-label={`View as ${profile.displayName}`}
               aria-pressed={isActive}
             >

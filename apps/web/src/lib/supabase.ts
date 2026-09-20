@@ -26,6 +26,12 @@ export const DEMO_EMAILS: Record<DemoProfileId, string> = {
   anu: 'anu@demo.careloop',
 };
 
+function demoProfileForEmail(email: string | undefined): DemoProfileId | null {
+  if (!email) return null;
+  const match = Object.entries(DEMO_EMAILS).find(([, demoEmail]) => demoEmail === email);
+  return (match?.[0] as DemoProfileId | undefined) ?? null;
+}
+
 async function establishDemoSession(profileId: DemoProfileId): Promise<string | null> {
   if (!isRealMode) return null;
   if (!supabase) throw new Error('Supabase public configuration is missing.');
@@ -76,6 +82,21 @@ export function ensureDemoSession(profileId: DemoProfileId): Promise<string | nu
   authenticationQueue = request;
   sessionRequests.set(profileId, request);
   return request;
+}
+
+export async function bootstrapDemoSession(
+  defaultProfileId: DemoProfileId = 'amma',
+): Promise<DemoProfileId> {
+  if (!isRealMode || !supabase) return defaultProfileId;
+
+  const { data } = await supabase.auth.getSession();
+  const existingProfileId = demoProfileForEmail(data.session?.user.email);
+  const hasUsableSession = (data.session?.expires_at ?? 0) * 1000 > Date.now() + 30_000;
+  const profileId = existingProfileId && hasUsableSession ? existingProfileId : defaultProfileId;
+
+  const accessToken = await ensureDemoSession(profileId);
+  if (!accessToken) throw new Error('The demo session could not be established.');
+  return profileId;
 }
 
 export function subscribeToCareEvents(
