@@ -37,6 +37,42 @@ describe('authenticated CareLoop API client', () => {
     );
   });
 
+  it('sends only the strict voice-turn context with the selected JWT', async () => {
+    ensureDemoSession.mockResolvedValue('amma-access-token');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tool: 'no_action',
+          status: 'no_action',
+          preview: {},
+          requires_confirmation: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const { routeVoiceTurn } = await import('./api');
+
+    await routeVoiceTurn('Hello.', PROFILES.amma);
+
+    expect(ensureDemoSession).toHaveBeenCalledWith('amma');
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init?.headers).toEqual(
+      expect.objectContaining({ Authorization: 'Bearer amma-access-token' }),
+    );
+    expect(JSON.parse(String(init?.body))).toEqual({
+      transcript: 'Hello.',
+      user_id: '10000000-0000-0000-0000-000000000001',
+      circle_id: '20000000-0000-0000-0000-000000000001',
+      speaker_id: '10000000-0000-0000-0000-000000000001',
+      patient_id: '10000000-0000-0000-0000-000000000001',
+      role: 'patient',
+      relationship: 'self',
+      patient_name: 'Amma',
+      preferred_language: 'Malayalam',
+      referenced_task_id: null,
+    });
+  });
+
   it('uses Maya authentication for Maya-reported event writes', async () => {
     ensureDemoSession.mockResolvedValue('maya-access-token');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(

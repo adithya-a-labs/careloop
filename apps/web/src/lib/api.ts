@@ -70,7 +70,6 @@ export function voiceContext(profile: DemoProfile) {
     user_id: PROFILE_UUIDS[profile.id],
     circle_id: DEMO_CIRCLE_ID,
     speaker_id: PROFILE_UUIDS[profile.id],
-    speaker_name: profile.displayName,
     patient_id: DEMO_AMMA_ID,
     role: isPatient ? 'patient' : profile.role === 'caregiver' ? 'caregiver' : 'family',
     relationship: isPatient ? 'self' : profile.role,
@@ -116,7 +115,7 @@ export interface VoiceTurnPreview {
   user_id: string;
   circle_id: string;
   speaker_id: string;
-  speaker_name: string;
+  speaker_name: string | null;
   patient_id: string;
   patient_name: string;
   role: string;
