@@ -18,6 +18,12 @@
 </p>
 
 <p align="center">
+  <img src="codex-hackathon-pics/ChatGPT Image Sep 19, 2026, 11_26_22 PM.png" alt="CareLoop shared Care Tasks dashboard" width="960">
+</p>
+
+<p align="center"><em>One calm place for the Care Circle to see what is happening, who is helping, and what comes next.</em></p>
+
+<p align="center">
   <strong>Voice → Understanding → Shared context → Coordination → Realtime action</strong>
 </p>
 
@@ -272,20 +278,54 @@ The workflow emphasized isolated ownership, explicit review, and tests after int
 
 ## Screenshots
 
-These are repository-tracked captures from the responsive UI validation pass.
+Follow the CareLoop story from Amma's voice-first check-in to shared context, coordinated family action, and Anu's bounded caregiver view.
 
 <table>
   <tr>
-    <td align="center"><strong>Care recipient</strong></td>
-    <td align="center"><strong>Voice</strong></td>
-    <td align="center"><strong>Family coordinator</strong></td>
-    <td align="center"><strong>Professional caregiver</strong></td>
+    <td width="50%" align="center"><strong>Patient Home</strong></td>
+    <td width="50%" align="center"><strong>Voice Update</strong></td>
   </tr>
   <tr>
-    <td><img src="output/playwright/ui-polish/after/home-390x844.png" alt="Amma's care-recipient home" width="220"></td>
-    <td><img src="output/playwright/ui-polish/after/voice-390x844.png" alt="CareLoop voice experience" width="220"></td>
-    <td><img src="output/playwright/ui-polish/after/roles/family-maya-390x844.png" alt="Maya's family coordinator home" width="220"></td>
-    <td><img src="output/playwright/ui-polish/after/roles/caregiver-anu-390x844.png" alt="Anu's professional caregiver home" width="220"></td>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 092455.png" alt="Amma's patient home with voice check-in and upcoming care" width="100%"></td>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 092530.png" alt="Amma's confirmed updates, upcoming care, and MemoryBox entry point" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Timeline</strong></td>
+    <td align="center"><strong>MemoryBox</strong></td>
+  </tr>
+  <tr>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 092557.png" alt="Shared Care Timeline with attributable updates" width="100%"></td>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 092740.png" alt="Private family MemoryBox stories and moments" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Care Circle</strong></td>
+    <td align="center"><strong>Catch Me Up</strong></td>
+  </tr>
+  <tr>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 092807.png" alt="Care Circle roles, languages, availability, and task counts" width="100%"></td>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 092833.png" alt="Maya's Catch Me Up dashboard with recent care context" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Coordination</strong></td>
+    <td align="center"><strong>Care Schedule</strong></td>
+  </tr>
+  <tr>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 092858.png" alt="Maya's coordination view with open tasks and Who can help action" width="100%"></td>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 092928.png" alt="Recently completed tasks and upcoming care schedule" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Rahul's View</strong></td>
+    <td align="center"><strong>Caregiver View</strong></td>
+  </tr>
+  <tr>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 093109.png" alt="Rahul's role-aware home and Catch Me Up view" width="100%"></td>
+    <td><img src="codex-hackathon-pics/Screenshot 2026-09-20 093145.png" alt="Anu's professional caregiver home with visit context and assigned tasks" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><strong>Visit Actions</strong></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="codex-hackathon-pics/Screenshot 2026-09-20 093213.png" alt="Anu's visit actions for completing assigned work or reporting a visit" width="100%"></td>
   </tr>
 </table>
 
