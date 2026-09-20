@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "accessibility-inclusive-design": {
+      "source": "hueyexe/frontend-agent-skills",
+      "sourceType": "github",
+      "skillPath": "accessibility-inclusive-design/SKILL.md",
+      "computedHash": "9a8384c4aafbe0b8184e35273225a0b6ece8208182bbadd0daec9285d018fca4"
+    },
+    "design-systems-frontend-architecture": {
+      "source": "hueyexe/frontend-agent-skills",
+      "sourceType": "github",
+      "skillPath": "design-systems-frontend-architecture/SKILL.md",
+      "computedHash": "2e1f63f5799073970e208c99637f290f23d1d3e8567ce52e117725bb32e34052"
+    },
+    "ui-visual-composition": {
+      "source": "hueyexe/frontend-agent-skills",
+      "sourceType": "github",
+      "skillPath": "ui-visual-composition/SKILL.md",
+      "computedHash": "bfe56aeeef4c79967f72fa0615e1dbdf661df3200be428a7ca93a8436a08d107"
+    },
+    "ux-usability-foundations": {
+      "source": "hueyexe/frontend-agent-skills",
+      "sourceType": "github",
+      "skillPath": "ux-usability-foundations/SKILL.md",
+      "computedHash": "f8e0c25e860ad50486c0d460ea90c15ef2c5c29e0ebcac8a0a6749ecc2d5f833"
+    },
+    "ux-writing-content-design": {
+      "source": "hueyexe/frontend-agent-skills",
+      "sourceType": "github",
+      "skillPath": "ux-writing-content-design/SKILL.md",
+      "computedHash": "c234ec2703b5de05172d9e6964d93d14f3d61a0248e8e438aae66ee99d8e002a"
+    }
+  }
+}

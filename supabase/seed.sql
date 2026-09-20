@@ -1,30 +1,403 @@
--- Synthetic local-demo identities. Do not use these credentials or records in production.
-insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+-- Fully synthetic, deterministic local-demo identities and family state.
+-- Do not reuse these credentials or records outside local/demo environments.
+insert into auth.users (
+  id, instance_id, aud, role, email, encrypted_password,
+  email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change,
+  email_change_token_new, email_change_token_current,
+  phone_change, phone_change_token, reauthentication_token,
+  is_super_admin, last_sign_in_at,
+  created_at, updated_at
+)
 values
-  ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'meera@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), now(), now()),
-  ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'priya@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), now(), now()),
-  ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'arjun@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), now(), now())
-on conflict (id) do nothing;
+  ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'amma@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, '', '', '', '', '', '', '', '', false, now(), now(), now()),
+  ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'maya@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, '', '', '', '', '', '', '', '', false, now(), now(), now()),
+  ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'rahul@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, '', '', '', '', '', '', '', '', false, now(), now(), now()),
+  ('10000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'anu@demo.careloop', crypt('careloop-demo', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, '', '', '', '', '', '', '', '', false, now(), now(), now())
+on conflict (id) do update set
+  email = excluded.email,
+  encrypted_password = excluded.encrypted_password,
+  email_confirmed_at = excluded.email_confirmed_at,
+  raw_app_meta_data = excluded.raw_app_meta_data,
+  raw_user_meta_data = excluded.raw_user_meta_data,
+  confirmation_token = excluded.confirmation_token,
+  recovery_token = excluded.recovery_token,
+  email_change = excluded.email_change,
+  email_change_token_new = excluded.email_change_token_new,
+  email_change_token_current = excluded.email_change_token_current,
+  phone_change = excluded.phone_change,
+  phone_change_token = excluded.phone_change_token,
+  reauthentication_token = excluded.reauthentication_token,
+  is_super_admin = excluded.is_super_admin,
+  last_sign_in_at = excluded.last_sign_in_at,
+  updated_at = excluded.updated_at;
 
-insert into public.profiles (id, display_name, age_range) values
-  ('10000000-0000-0000-0000-000000000001', 'Meera', '65+'),
-  ('10000000-0000-0000-0000-000000000002', 'Priya', '18-64'),
-  ('10000000-0000-0000-0000-000000000003', 'Arjun', '18-64') on conflict (id) do nothing;
+update auth.identities
+set provider_id = user_id::text, updated_at = now()
+where user_id in (
+  '10000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000003',
+  '10000000-0000-0000-0000-000000000004'
+);
 
-insert into public.care_circles (id, name, created_by, invite_code) values
-  ('20000000-0000-0000-0000-000000000001', 'The Sharma family', '10000000-0000-0000-0000-000000000002', 'CARE42') on conflict (id) do nothing;
+insert into auth.identities (
+  provider_id, user_id, identity_data, provider, created_at, updated_at
+)
+select
+  id::text,
+  id,
+  jsonb_build_object(
+    'sub', id::text,
+    'email', email,
+    'email_verified', true,
+    'phone_verified', false
+  ),
+  'email',
+  now(),
+  now()
+from auth.users
+where id in (
+  '10000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000003',
+  '10000000-0000-0000-0000-000000000004'
+)
+on conflict (provider_id, provider) do update set
+  identity_data = excluded.identity_data,
+  updated_at = excluded.updated_at;
 
-insert into public.circle_members (circle_id, profile_id, role) values
-  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'care_recipient'),
-  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'family'),
-  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003', 'family') on conflict do nothing;
+insert into public.profiles (id, display_name, age_range, preferred_language, preferences)
+values
+  ('10000000-0000-0000-0000-000000000001', 'Amma', '65+', 'ml', '{"demo": true}'::jsonb),
+  ('10000000-0000-0000-0000-000000000002', 'Maya', '18-64', 'en', '{"demo": true}'::jsonb),
+  ('10000000-0000-0000-0000-000000000003', 'Rahul', '18-64', 'en', '{"demo": true}'::jsonb),
+  ('10000000-0000-0000-0000-000000000004', 'Anu', '18-64', 'ml', '{"demo": true}'::jsonb)
+on conflict (id) do update set
+  display_name = excluded.display_name,
+  age_range = excluded.age_range,
+  preferred_language = excluded.preferred_language,
+  preferences = excluded.preferences;
 
-insert into public.tasks (circle_id, created_by, assignee_id, title, due_at) values
-  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000003', 'Pick up prescription', now() + interval '4 hours'),
-  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', null, 'Confirm evening visit', now() + interval '8 hours');
+insert into public.care_circles (id, name, created_by, invite_code)
+values (
+  '20000000-0000-0000-0000-000000000001',
+  'Amma''s Care Circle',
+  '10000000-0000-0000-0000-000000000002',
+  'AMMA-DEMO'
+)
+on conflict (id) do update set
+  name = excluded.name,
+  created_by = excluded.created_by,
+  invite_code = excluded.invite_code;
 
-insert into public.care_events (circle_id, author_id, kind, title, details) values
-  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'check-in', 'Morning check-in completed', 'Meera is feeling cheerful and had breakfast.');
+insert into public.circle_members (circle_id, profile_id, role, relationship, is_active)
+values
+  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'patient', 'patient', true),
+  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'family', 'daughter', true),
+  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003', 'family', 'son', true),
+  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000004', 'caregiver', 'home nurse', true)
+on conflict (circle_id, profile_id) do update set
+  role = excluded.role,
+  relationship = excluded.relationship,
+  is_active = excluded.is_active;
 
-insert into public.memories (circle_id, author_id, kind, title, body) values
-  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 'story', 'Sunday lunch', 'Everyone shared lunch together.');
+insert into public.care_events (
+  id, circle_id, subject_id, reported_by, event_type, event_data,
+  source, raw_transcript, confidence, occurred_at, created_at
+)
+values
+  (
+    '30000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'meal',
+    '{"meal": "lunch", "intake": "low"}'::jsonb,
+    'manual',
+    'Amma didn''t eat much at lunch.',
+    0.98,
+    now() - interval '1 day 5 hours',
+    now() - interval '1 day 4 hours 55 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000002',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000004',
+    'visit',
+    '{"visit_type": "home_nurse", "status": "completed"}'::jsonb,
+    'manual',
+    null,
+    null,
+    now() - interval '20 hours',
+    now() - interval '19 hours 55 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'check_in',
+    '{"mood": "okay", "note": "Morning voice check-in completed"}'::jsonb,
+    'voice',
+    'I am doing okay this morning.',
+    0.96,
+    now() - interval '2 hours',
+    now() - interval '1 hour 59 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'sleep',
+    '{"quality": "slightly_restless", "wakeups": 2}'::jsonb,
+    'voice',
+    'Sleep was a little restless, but I am comfortable now.',
+    0.95,
+    now() - interval '1 day 9 hours',
+    now() - interval '1 day 8 hours 58 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000005',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000004',
+    'meal',
+    '{"meal": "breakfast", "intake": "normal"}'::jsonb,
+    'manual',
+    null,
+    null,
+    now() - interval '1 day 7 hours',
+    now() - interval '1 day 6 hours 55 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000006',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'meal',
+    '{"meal": "dinner", "intake": "normal"}'::jsonb,
+    'manual',
+    null,
+    null,
+    now() - interval '2 days 12 hours',
+    now() - interval '2 days 11 hours 55 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000007',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000003',
+    'check_in',
+    '{"mood": "good", "note": "Enjoyed the afternoon family call"}'::jsonb,
+    'manual',
+    null,
+    null,
+    now() - interval '3 days 4 hours',
+    now() - interval '3 days 3 hours 55 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000008',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000004',
+    'visit',
+    '{"visit_type": "home_nurse", "status": "completed", "note": "Routine visit completed"}'::jsonb,
+    'manual',
+    null,
+    null,
+    now() - interval '4 days 3 hours',
+    now() - interval '4 days 2 hours 55 minutes'
+  )
+on conflict (id) do update set
+  reported_by = excluded.reported_by,
+  event_type = excluded.event_type,
+  event_data = excluded.event_data,
+  source = excluded.source,
+  raw_transcript = excluded.raw_transcript,
+  confidence = excluded.confidence,
+  occurred_at = excluded.occurred_at,
+  created_at = excluded.created_at;
+
+insert into public.tasks (
+  id, circle_id, title, description, created_by, assigned_to, status,
+  priority, due_at, completed_at, source_event_id, created_at, updated_at
+)
+values
+  (
+    '40000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    'Pick up prescription',
+    'Collect the prepared prescription from the pharmacy.',
+    '10000000-0000-0000-0000-000000000002',
+    null,
+    'pending',
+    'high',
+    (
+      (now() at time zone 'Asia/Kolkata')::date + interval '1 day 15 hours'
+    ) at time zone 'Asia/Kolkata',
+    null,
+    null,
+    date_trunc('day', now()) + interval '9 hours',
+    date_trunc('day', now()) + interval '9 hours'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000002',
+    '20000000-0000-0000-0000-000000000001',
+    'Evening medicine check',
+    'Confirm that the usual evening medicine routine was completed.',
+    '10000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000004',
+    'pending',
+    'medium',
+    (
+      (now() at time zone 'Asia/Kolkata')::date + interval '20 hours'
+    ) at time zone 'Asia/Kolkata',
+    null,
+    null,
+    now() - interval '3 hours',
+    now() - interval '3 hours'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000001',
+    'Bring fruit for Amma',
+    'Bring the fruit Amma asked for during the family visit.',
+    '10000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000002',
+    'completed',
+    'low',
+    now() - interval '1 day',
+    now() - interval '1 day 1 hour',
+    null,
+    now() - interval '2 days',
+    now() - interval '1 day 1 hour'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000001',
+    'Call after lunch',
+    'Check in after lunch and share a short family update.',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003',
+    'completed',
+    'medium',
+    now() - interval '2 days',
+    now() - interval '2 days 1 hour',
+    null,
+    now() - interval '3 days',
+    now() - interval '2 days 1 hour'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000005',
+    '20000000-0000-0000-0000-000000000001',
+    'Prepare visit notes',
+    'Keep the next routine visit details together for Anu.',
+    '10000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000002',
+    'completed',
+    'low',
+    now() - interval '3 days',
+    now() - interval '3 days 30 minutes',
+    null,
+    now() - interval '4 days',
+    now() - interval '3 days 30 minutes'
+  )
+on conflict (id) do update set
+  title = excluded.title,
+  description = excluded.description,
+  assigned_to = excluded.assigned_to,
+  status = excluded.status,
+  priority = excluded.priority,
+  due_at = excluded.due_at,
+  completed_at = excluded.completed_at,
+  updated_at = excluded.updated_at;
+
+insert into public.scheduled_items (
+  id, circle_id, created_by, title, starts_at, ends_at, recurrence_rule, created_at
+)
+values
+  (
+    '50000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'Maya evening call',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 19 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 19 hours 30 minutes') at time zone 'Asia/Kolkata',
+    null,
+    now()
+  ),
+  (
+    '50000000-0000-0000-0000-000000000002',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'Anu home visit',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 10 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 11 hours') at time zone 'Asia/Kolkata',
+    null,
+    now()
+  ),
+  (
+    '50000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'Usual medicine follow-up',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 20 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 20 hours 15 minutes') at time zone 'Asia/Kolkata',
+    null,
+    now()
+  )
+on conflict (id) do update set
+  title = excluded.title,
+  starts_at = excluded.starts_at,
+  ends_at = excluded.ends_at;
+
+insert into public.memories (
+  id, circle_id, author_id, subject_id, kind, title, body,
+  approximate_year, created_at
+)
+values
+  ('60000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'story', 'My first job', 'Amma remembers starting her first job in 1978 and the excitement of that first morning.', 1978, now() - interval '30 days'),
+  ('60000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'story', 'Our old family home', 'A warm memory of the old family home and its familiar evening routines.', 1985, now() - interval '24 days'),
+  ('60000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'story', 'Maya''s first day of school', 'Amma remembers checking Maya''s school bag twice before they walked out together.', 1994, now() - interval '18 days'),
+  ('60000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'story', 'Family trip to Munnar', 'Cool air, shared snacks, and an easy family day together in Munnar.', 2001, now() - interval '12 days'),
+  ('60000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'story', 'Rahul''s graduation day', 'The family gathered together and Amma remembers Rahul''s proud smile.', 2008, now() - interval '6 days')
+on conflict (id) do update set
+  title = excluded.title,
+  body = excluded.body,
+  approximate_year = excluded.approximate_year;
+
+insert into public.availability (
+  id, circle_id, profile_id, starts_at, ends_at, note
+)
+values
+  (
+    '70000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000003',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 13 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 17 hours') at time zone 'Asia/Kolkata',
+    'Available tomorrow afternoon'
+  ),
+  (
+    '70000000-0000-0000-0000-000000000002',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 18 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 21 hours') at time zone 'Asia/Kolkata',
+    'Available for an evening call or visit'
+  ),
+  (
+    '70000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000004',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 9 hours 30 minutes') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 12 hours') at time zone 'Asia/Kolkata',
+    'Planned home visit window'
+  )
+on conflict (id) do update set
+  starts_at = excluded.starts_at,
+  ends_at = excluded.ends_at,
+  note = excluded.note;

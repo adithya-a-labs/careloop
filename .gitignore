@@ -5,9 +5,12 @@ dist/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.env
-.env.local
+.env*
+!.env.example
 .DS_Store
 coverage/
 .turbo/
+.pnpm-store/
+.validation-dist*/
 supabase/.temp/
+supabase/.branches/

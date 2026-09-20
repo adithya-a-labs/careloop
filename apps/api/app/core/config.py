@@ -1,11 +1,13 @@
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     app_env: str = "development"
-    web_origin: str = "http://localhost:5173"
+    web_origin: str = "http://localhost:5174"
     supabase_url: str = ""
-    supabase_service_role_key: str = ""
+    supabase_secret_key: str = ""
     openai_api_key: str = ""
     demo_mode: bool = True
     model_config = SettingsConfigDict(env_file="../../.env", extra="ignore")

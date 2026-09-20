@@ -1,16 +1,55 @@
-import { HeartHandshake, Home, ListChecks, Mic, Users } from 'lucide-react';
-import { NavLink, Outlet } from 'react-router-dom';
-import { DemoRoleSwitcher } from '../navigation/DemoRoleSwitcher';
+import { HeartHandshake, Home, Clock, Users, ListChecks, BookHeart } from 'lucide-react';
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { ProfileSwitcher } from '../navigation/ProfileSwitcher';
+import { useDemoProfile } from '../../features/demo/DemoContext';
+import { canAccessMemoryBox, getHomeRoute } from '../../features/demo/role-experience';
 
-const links = [
-  ['/home', 'Home', Home], ['/tasks', 'Care', ListChecks], ['/voice', 'Talk', Mic], ['/circle', 'Circle', Users],
+const navLinks = [
+  { to: '/home', label: 'Home', icon: Home },
+  { to: '/timeline', label: 'Timeline', icon: Clock },
+  { to: '/tasks', label: 'Tasks', icon: ListChecks },
+  { to: '/memories', label: 'Memories', icon: BookHeart },
+  { to: '/circle', label: 'Circle', icon: Users },
 ] as const;
 
 export function AppShell() {
-  return <div className="app-shell">
-    <header className="topbar"><NavLink to="/home" className="brand"><HeartHandshake /> CareLoop</NavLink><DemoRoleSwitcher /></header>
-    <main className="page-wrap"><Outlet /></main>
-    <nav className="bottom-nav" aria-label="Primary navigation">{links.map(([to, label, Icon]) =>
-      <NavLink key={to} to={to}><Icon size={21} /><span>{label}</span></NavLink>)}</nav>
-  </div>;
+  const { activeProfile } = useDemoProfile();
+  const location = useLocation();
+  const homeRoute = getHomeRoute(activeProfile);
+  const visibleNavLinks = canAccessMemoryBox(activeProfile)
+    ? navLinks
+    : navLinks.filter((link) => link.to !== '/memories');
+
+  if (!canAccessMemoryBox(activeProfile) && location.pathname === '/memories') {
+    return <Navigate to={homeRoute} replace />;
+  }
+
+  return (
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <header className="topbar">
+        <NavLink to={homeRoute} className="brand">
+          <HeartHandshake size={24} />
+          <span>CareLoop</span>
+        </NavLink>
+        <ProfileSwitcher />
+      </header>
+
+      <main className="page-wrap" id="main-content" tabIndex={-1}>
+        <Outlet />
+      </main>
+
+      <nav className="bottom-nav" aria-label="Primary navigation">
+        {visibleNavLinks.map(({ to, label, icon: Icon }) => {
+          const effectiveTo = to === '/home' ? homeRoute : to;
+          return (
+            <NavLink key={to} to={effectiveTo}>
+              <Icon size={20} />
+              <span>{label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
+    </div>
+  );
 }
