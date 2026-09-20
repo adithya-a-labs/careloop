@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -35,7 +36,9 @@ class HandoffNarrative(StrictModel):
 
 
 class CoordinationSuggestion(StrictModel):
-    action: Literal["suggest_assignee", "create_task", "assign_task", "complete_task", "list_availability"]
+    action: Literal[
+        "suggest_assignee", "create_task", "assign_task", "complete_task", "list_availability"
+    ]
     task_id: UUID | None = None
     assignee_id: UUID | None = None
     message: str
@@ -50,6 +53,19 @@ class MemoryExtractionResult(StrictModel):
     themes: list[str] = Field(default_factory=list)
     body: str
     confidence: float = Field(ge=0.0, le=1.0)
+
+
+class ContextSource(StrictModel):
+    kind: Literal["care_event", "task", "scheduled_item", "member", "availability"]
+    id: UUID
+    label: str
+    occurred_at: datetime | None = None
+
+
+class ContextQueryResult(StrictModel):
+    heading: Literal["CARELOOP", "BEFORE YOUR VISIT", "TODAY", "YOUR TASKS"]
+    answer: str = Field(min_length=1, max_length=1200)
+    sources: list[ContextSource] = Field(default_factory=list)
 
 
 class VoiceTurn(StrictModel):
@@ -98,40 +114,49 @@ class ToolResult(StrictModel):
     preview: dict[str, object]
     requires_confirmation: bool = True
 
+
 class SleepData(StrictModel):
     quality: Literal["good", "fair", "poor"]
     duration_hours: float | None = None
+
 
 class MealData(StrictModel):
     meal: Literal["breakfast", "lunch", "dinner", "snack"]
     intake: Literal["normal", "low", "none"]
 
+
 class MoodData(StrictModel):
     valence: Literal["positive", "neutral", "negative"]
     note: str | None = None
+
 
 class MedicationData(StrictModel):
     name: str
     taken: bool
     note: str | None = None
 
+
 class ActivityData(StrictModel):
     type: str
     duration_minutes: int | None = None
     note: str | None = None
+
 
 class SymptomData(StrictModel):
     name: str
     severity: Literal["mild", "moderate", "severe"]
     note: str | None = None
 
+
 class AppointmentData(StrictModel):
     type: str
     scheduled_for: str | None = None
     note: str | None = None
 
+
 class NoteData(StrictModel):
     content: str
+
 
 EventData = (
     SleepData
@@ -144,14 +169,18 @@ EventData = (
     | NoteData
 )
 
+
 class ExtractedCareEvent(StrictModel):
-    type: Literal["sleep", "meal", "mood", "medication", "activity", "symptom", "appointment", "note"]
+    type: Literal[
+        "sleep", "meal", "mood", "medication", "activity", "symptom", "appointment", "note"
+    ]
     data: EventData
     subject_id: str
     reported_by: str
     source: Literal["voice"] = "voice"
     raw_transcript: str
     confidence: float = Field(ge=0.0, le=1.0)
+
 
 class CareEventExtractionResult(StrictModel):
     events: list[ExtractedCareEvent]
@@ -160,6 +189,7 @@ class CareEventExtractionResult(StrictModel):
 __all__ = [
     "CareEventCreate",
     "CareEventExtractionResult",
+    "ContextQueryResult",
     "ExtractedCareEvent",
     "LiveSessionCreate",
     "LiveSessionResponse",

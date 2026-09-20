@@ -4,6 +4,9 @@ import { Clock, Globe, ListChecks } from 'lucide-react';
 import { useDemoProfile } from '../features/demo/DemoContext';
 import {
   DEMO_CIRCLE_ID,
+  cachedAvailability,
+  cachedCircleMembers,
+  cachedTasks,
   listAvailability,
   listCircleMembers,
   listTasks,
@@ -25,24 +28,28 @@ const MEMBER_EMOJIS: Record<string, string> = {
 
 export function CareCirclePage() {
   const { activeProfile, authStatus } = useDemoProfile();
-  const [members, setMembers] = useState<CircleMember[]>([]);
-  const [availability, setAvailability] = useState<MemberAvailability[]>([]);
-  const [tasks, setTasks] = useState<ApiTask[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<CircleMember[]>(() => cachedCircleMembers(activeProfile.id) ?? []);
+  const [availability, setAvailability] = useState<MemberAvailability[]>(() => cachedAvailability(activeProfile.id) ?? []);
+  const [tasks, setTasks] = useState<ApiTask[]>(() => cachedTasks(activeProfile.id) ?? []);
+  const [loading, setLoading] = useState(() => !(cachedCircleMembers(activeProfile.id) && cachedAvailability(activeProfile.id) && cachedTasks(activeProfile.id)));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let taskChannel: ReturnType<typeof subscribeToTasks> = null;
 
-    setMembers([]);
-    setAvailability([]);
-    setTasks([]);
-    setLoading(true);
+    const currentMembers = cachedCircleMembers(activeProfile.id);
+    const currentAvailability = cachedAvailability(activeProfile.id);
+    const currentTasks = cachedTasks(activeProfile.id);
+    const hasCurrentData = Boolean(currentMembers && currentAvailability && currentTasks);
+    setMembers(currentMembers ?? []);
+    setAvailability(currentAvailability ?? []);
+    setTasks(currentTasks ?? []);
+    setLoading(!hasCurrentData);
     setError(null);
 
     if (authStatus !== 'authenticated') {
-      setLoading(authStatus === 'loading');
+      setLoading(authStatus === 'loading' && !hasCurrentData);
       return;
     }
 

@@ -699,6 +699,14 @@ button { color: var(--care-ink); }
 .voice-text-row { display: flex; gap: 0.6rem; }
 .voice-text-row input { flex: 1; min-width: 0; min-height: 44px; border: 1.5px solid var(--care-border); border-radius: 14px; background: var(--care-surface); padding: 0.7rem 0.9rem; color: var(--care-ink); font: inherit; }
 .voice-preview-message { color: var(--care-ink); line-height: 1.55; font-weight: 700; }
+.voice-context-sources {
+  margin: 0.75rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--care-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.voice-context-sources li + li { margin-top: 0.35rem; }
 
 /* ═══════════════════════════════════════════════════════════
    LEGACY / EXISTING PAGES

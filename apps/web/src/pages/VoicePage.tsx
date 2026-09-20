@@ -21,13 +21,14 @@ function previewMessage(result: VoiceTurnResult | null) {
   if (!result) return '';
   if (result.preview.handoff_summary) return result.preview.handoff_summary.summary;
   if (result.preview.coordination_suggestion) return result.preview.coordination_suggestion.message;
+  if (result.preview.context_query) return result.preview.context_query.answer;
   if (result.preview.memory_extraction) {
     return `Save “${result.preview.memory_extraction.title}” to MemoryBox?`;
   }
   if (result.preview.extracted_events?.length) {
     return `${result.preview.extracted_events.length} care update${result.preview.extracted_events.length === 1 ? '' : 's'} ready to share.`;
   }
-  return result.preview.message ?? 'No CareLoop action was found.';
+  return result.preview.message ?? 'CareLoop could not prepare a response for that request.';
 }
 
 export function VoicePage() {
@@ -195,6 +196,7 @@ export function VoicePage() {
         : <Mic size={48} aria-hidden="true" />;
 
   const suggestion = result?.preview.coordination_suggestion;
+  const contextAnswer = result?.preview.context_query;
 
   return (
     <div className="voice-page">
@@ -276,9 +278,22 @@ export function VoicePage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
           >
-            <div className="voice-transcript-tag">{result.preview.intent.replaceAll('_', ' ')}</div>
+            <div className="voice-transcript-tag">
+              {contextAnswer?.heading ?? result.preview.intent.replaceAll('_', ' ')}
+            </div>
             <blockquote className="voice-transcript-quote">“{transcript}”</blockquote>
             <p className="voice-preview-message">{statusMessage}</p>
+
+            {contextAnswer?.sources.length ? (
+              <ul className="voice-context-sources" aria-label="CareLoop sources">
+                {contextAnswer.sources.map((source) => (
+                  <li key={`${source.kind}:${source.id}`}>
+                    {source.label}
+                    {source.occurred_at ? ` · ${new Date(source.occurred_at).toLocaleString()}` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
 
             {result.requires_confirmation && state === 'speaking' && (
               <button type="button" className="primary-button touch-target" onClick={() => void confirmResult()} disabled={isProcessing}>

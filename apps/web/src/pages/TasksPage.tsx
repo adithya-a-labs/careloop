@@ -3,6 +3,8 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { Plus, Check, Clock, AlertCircle, UserCheck } from 'lucide-react';
 import {
   listTasks,
+  cachedAvailability,
+  cachedTasks,
   updateTask,
   createTask,
   listAvailability,
@@ -40,14 +42,14 @@ const itemVariants: Variants = {
 
 export function TasksPage() {
   const { activeProfile, authStatus } = useDemoProfile();
-  const [tasks, setTasks] = useState<ApiTask[]>([]);
-  const [availability, setAvailability] = useState<MemberAvailability[]>([]);
+  const [tasks, setTasks] = useState<ApiTask[]>(() => cachedTasks(activeProfile.id) ?? []);
+  const [availability, setAvailability] = useState<MemberAvailability[]>(() => cachedAvailability(activeProfile.id) ?? []);
   const [activeTab, setActiveTab] = useState<TabType>('All');
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDay, setNewTaskDay] = useState<'Today' | 'Tomorrow'>('Today');
   const [heroAssignedId, setHeroAssignedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !(cachedTasks(activeProfile.id) && cachedAvailability(activeProfile.id)));
   const [error, setError] = useState<string | null>(null);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
 
@@ -56,7 +58,8 @@ export function TasksPage() {
 
   // Load real tasks and availability
   const loadTasksData = useCallback(async () => {
-    setLoading(true);
+    const hasCurrentData = Boolean(cachedTasks(activeProfile.id) && cachedAvailability(activeProfile.id));
+    setLoading(!hasCurrentData);
     setError(null);
     try {
       const [fetchedTasks, fetchedAvail] = await Promise.all([
@@ -66,8 +69,6 @@ export function TasksPage() {
       setTasks(fetchedTasks);
       setAvailability(fetchedAvail);
     } catch {
-      setTasks([]);
-      setAvailability([]);
       setError('CareLoop could not load tasks. Check your connection and refresh the page to try again.');
     } finally {
       setLoading(false);
@@ -77,11 +78,14 @@ export function TasksPage() {
   useEffect(() => {
     let cancelled = false;
     let taskSub: ReturnType<typeof subscribeToTasks> = null;
-    setTasks([]);
-    setAvailability([]);
+    const currentTasks = cachedTasks(activeProfile.id);
+    const currentAvailability = cachedAvailability(activeProfile.id);
+    const hasCurrentData = Boolean(currentTasks && currentAvailability);
+    setTasks(currentTasks ?? []);
+    setAvailability(currentAvailability ?? []);
     setHeroAssignedId(null);
     if (authStatus !== 'authenticated') {
-      setLoading(authStatus === 'loading');
+      setLoading(authStatus === 'loading' && !hasCurrentData);
       return;
     }
     void loadTasksData()

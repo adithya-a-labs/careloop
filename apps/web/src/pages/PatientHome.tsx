@@ -4,28 +4,30 @@ import { BookHeart, CalendarDays, ChevronRight, Mic } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import StatusCard from '../components/cards/StatusCard';
 import { useDemoProfile } from '../features/demo/DemoContext';
-import { DEMO_CIRCLE_ID, getHandoffContext, listCareEvents, type CareEvent, type HandoffContext } from '../lib/api';
+import { cachedCareEvents, cachedHandoffContext, DEMO_CIRCLE_ID, getHandoffContext, listCareEvents, type CareEvent, type HandoffContext } from '../lib/api';
 import { removeRealtimeChannel, subscribeToCareEvents } from '../lib/supabase';
 
 export function PatientHomePage() {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
   const { activeProfile, authStatus } = useDemoProfile();
-  const [events, setEvents] = useState<CareEvent[]>([]);
-  const [handoff, setHandoff] = useState<HandoffContext | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [events, setEvents] = useState<CareEvent[]>(() => cachedCareEvents(activeProfile.id) ?? []);
+  const [handoff, setHandoff] = useState<HandoffContext | null>(() => cachedHandoffContext(activeProfile.id) ?? null);
+  const [loading, setLoading] = useState(() => !(cachedCareEvents(activeProfile.id) && cachedHandoffContext(activeProfile.id)));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let channel: ReturnType<typeof subscribeToCareEvents> = null;
-    setEvents([]);
-    setHandoff(null);
-    setLoading(true);
+    const currentEvents = cachedCareEvents(activeProfile.id);
+    const currentHandoff = cachedHandoffContext(activeProfile.id);
+    setEvents(currentEvents ?? []);
+    setHandoff(currentHandoff ?? null);
+    setLoading(!(currentEvents && currentHandoff));
     setError(null);
 
     if (authStatus !== 'authenticated') {
-      setLoading(authStatus === 'loading');
+      setLoading(authStatus === 'loading' && !(currentEvents && currentHandoff));
       return;
     }
 

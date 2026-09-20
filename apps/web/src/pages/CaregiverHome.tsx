@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useDemoProfile } from '../features/demo/DemoContext';
 import {
   DEMO_ANU_ID,
+  cachedHandoffContext,
+  cachedTasks,
   getHandoffContext,
   listTasks,
   updateTask,
@@ -18,20 +20,23 @@ function isOpen(task: ApiTask) {
 export function CaregiverHomePage() {
   const navigate = useNavigate();
   const { activeProfile, authStatus } = useDemoProfile();
-  const [handoff, setHandoff] = useState<HandoffContext | null>(null);
-  const [tasks, setTasks] = useState<ApiTask[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [handoff, setHandoff] = useState<HandoffContext | null>(() => cachedHandoffContext(activeProfile.id) ?? null);
+  const [tasks, setTasks] = useState<ApiTask[]>(() => cachedTasks(activeProfile.id) ?? []);
+  const [loading, setLoading] = useState(() => !(cachedHandoffContext(activeProfile.id) && cachedTasks(activeProfile.id)));
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setHandoff(null);
-    setTasks([]);
+    const currentHandoff = cachedHandoffContext(activeProfile.id);
+    const currentTasks = cachedTasks(activeProfile.id);
+    const hasCurrentData = Boolean(currentHandoff && currentTasks);
+    setHandoff(currentHandoff ?? null);
+    setTasks(currentTasks ?? []);
     setError(null);
-    setLoading(true);
+    setLoading(!hasCurrentData);
     if (authStatus !== 'authenticated') {
-      setLoading(authStatus === 'loading');
+      setLoading(authStatus === 'loading' && !hasCurrentData);
       return;
     }
     Promise.all([getHandoffContext(activeProfile.id), listTasks(activeProfile.id)])

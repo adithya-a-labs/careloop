@@ -1,15 +1,18 @@
 """Routes a request to a bounded specialist; it never receives database query access."""
-from app.agents import care_event, coordination, handoff, memory
+
+from app.agents import care_event, context, coordination, handoff, memory
 from app.agents.intent_router import Intent, route_intent
 
-AGENTS = {module.name: module for module in (care_event, coordination, handoff, memory)}
+AGENTS = {module.name: module for module in (care_event, context, coordination, handoff, memory)}
 
 INTENT_TO_AGENT = {
     Intent.CARE_UPDATE: "care_event",
     Intent.CATCH_UP: "handoff",
     Intent.COORDINATION: "coordination",
     Intent.MEMORY: "memory",
+    Intent.CONTEXT_QUERY: "context",
 }
+
 
 def delegate(agent_name: str, context: dict[str, object]) -> dict[str, object]:
     if agent_name not in AGENTS:

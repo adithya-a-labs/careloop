@@ -31,12 +31,13 @@ This document defines stable rules for communication between CareLoop clients, F
 
 ## Voice turn integration
 
-- `POST /api/v1/voice/turn` routes care updates, handoffs, coordination, and memories without requiring the user to select an agent.
+- `POST /api/v1/voice/turn` routes care updates, handoffs, coordination, memories, and grounded `context_query` reads without requiring the user to select an agent.
 - The authenticated actor must match the supplied `user_id` and `speaker_id`; circle and patient access are verified before an agent runs.
 - Voice turns preserve `circle_id`, `patient_id`, `patient_name`, `speaker_id`, `role`, `relationship`, and `preferred_language` throughout routing.
 - Mutating results return a reviewed draft and `requires_confirmation: true`. Clients submit the confirmed draft through the canonical FastAPI care-event, task, or memory endpoint.
 - A coordination follow-up may include `referenced_task_id` so a phrase such as “Ask Rahul” can update the task that was just discussed without guessing identity or task scope.
 - Handoff results are read-only, use the authorized handoff-context service, and return a short narrative plus source records with attribution and timestamps.
+- Context-query results are read-only and return a grounded answer, presentation heading, and source timestamps from allow-listed care-event, task, member, schedule, availability, and handoff services. Caregiver context queries never receive a MemoryBox retrieval tool.
 
 ## Compatibility
 

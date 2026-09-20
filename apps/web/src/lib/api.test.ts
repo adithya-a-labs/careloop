@@ -64,6 +64,7 @@ describe('authenticated CareLoop API client', () => {
       user_id: '10000000-0000-0000-0000-000000000001',
       circle_id: '20000000-0000-0000-0000-000000000001',
       speaker_id: '10000000-0000-0000-0000-000000000001',
+      speaker_name: 'Amma',
       patient_id: '10000000-0000-0000-0000-000000000001',
       role: 'patient',
       relationship: 'self',
@@ -124,5 +125,22 @@ describe('authenticated CareLoop API client', () => {
 
     await expect(listCareEvents('amma')).rejects.toThrow('authentication is not ready');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates concurrent reads and reuses fresh circle data', async () => {
+    ensureDemoSession.mockResolvedValue('maya-access-token');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const { listCircleMembers } = await import('./api');
+
+    await Promise.all([listCircleMembers('maya'), listCircleMembers('maya')]);
+    await listCircleMembers('maya');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ensureDemoSession).toHaveBeenCalledTimes(1);
   });
 });

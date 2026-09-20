@@ -10,6 +10,7 @@ class Intent(str, Enum):
     CATCH_UP = "catch_up"
     COORDINATION = "coordination"
     MEMORY = "memory"
+    CONTEXT_QUERY = "context_query"
     UNKNOWN = "unknown"
 
 
@@ -33,6 +34,7 @@ _CARE_UPDATE_PATTERNS = (
     " lunch",
     " dinner",
     " snack",
+    " ate",
     "food",
     "medication",
     "medicine",
@@ -199,6 +201,29 @@ _MEMORY_PATTERNS = (
     "എന്റെ ആദ്യ ജോലി",
 )
 
+_CONTEXT_QUERY_PATTERNS = (
+    "what do i have",
+    "what do we have",
+    "when is",
+    "when did",
+    "who is visiting",
+    "who's visiting",
+    "how is amma",
+    "how am i doing",
+    "did amma",
+    "did i",
+    "what hasn't been done",
+    "what has not been done",
+    "what are my tasks",
+    "what do i need to do",
+    "what should i know",
+    "what changed",
+    "what's happening",
+    "what is happening",
+    "what is scheduled",
+    "what's scheduled",
+)
+
 
 def _match_any(text: str, patterns: tuple[str, ...]) -> bool:
     lowered = text.lower()
@@ -208,9 +233,7 @@ def _match_any(text: str, patterns: tuple[str, ...]) -> bool:
 def route_intent(transcript: str) -> IntentResult:
     """Determine the intent from a transcript using deterministic pattern matching."""
     if not transcript or not transcript.strip():
-        return IntentResult(
-            intent=Intent.UNKNOWN, confidence=0.0, reasoning="Empty transcript"
-        )
+        return IntentResult(intent=Intent.UNKNOWN, confidence=0.0, reasoning="Empty transcript")
 
     lowered = transcript.lower().strip()
 
@@ -226,6 +249,15 @@ def route_intent(transcript: str) -> IntentResult:
             intent=Intent.MEMORY,
             confidence=0.85,
             reasoning="Matched memory patterns (tell you about, story, remember, etc.)",
+        )
+
+    # Questions about existing CareLoop state must be routed before broad
+    # coordination and care-update keywords such as "task", "visit", or "lunch".
+    if _match_any(lowered, _CONTEXT_QUERY_PATTERNS):
+        return IntentResult(
+            intent=Intent.CONTEXT_QUERY,
+            confidence=0.95,
+            reasoning="Matched a grounded CareLoop context question",
         )
 
     if _match_any(lowered, _COORDINATION_PATTERNS):

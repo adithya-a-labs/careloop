@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 from functools import lru_cache
-from threading import RLock
+from hashlib import sha256
+from threading import RLock, local
+from time import monotonic
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -29,6 +32,8 @@ DEMO_RAHUL_ID = "10000000-0000-0000-0000-000000000003"
 DEMO_ANU_ID = "10000000-0000-0000-0000-000000000004"
 DEMO_CIRCLE_ID = "20000000-0000-0000-0000-000000000001"
 HANDOFF_DEFAULT_WINDOW_HOURS = 48
+ACTOR_CACHE_TTL_SECONDS = 15
+MEMBERSHIP_CACHE_TTL_SECONDS = 5
 DEMO_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
 
 
@@ -41,9 +46,7 @@ def _iso(value: datetime) -> str:
 
 
 def _demo_state() -> dict[str, Any]:
-    today = _utc_now().astimezone(DEMO_TIMEZONE).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    today = _utc_now().astimezone(DEMO_TIMEZONE).replace(hour=0, minute=0, second=0, microsecond=0)
     profiles = {
         DEMO_AMMA_ID: {
             "id": DEMO_AMMA_ID,
@@ -235,7 +238,9 @@ class CareCoordinationService:
     def __init__(self) -> None:
         self._state = _demo_state()
         self._lock = RLock()
-        self._supabase: Any | None = None
+        self._thread_clients = local()
+        self._actor_cache: dict[bytes, tuple[str, float]] = {}
+        self._membership_cache: dict[tuple[str, str], float] = {}
 
     @property
     def uses_supabase(self) -> bool:
@@ -246,18 +251,20 @@ class CareCoordinationService:
     def _client(self) -> Any:
         if not self.uses_supabase:
             raise BackendUnavailableError()
-        with self._lock:
-            if self._supabase is None:
-                try:
-                    from supabase import create_client
+        client = getattr(self._thread_clients, "supabase", None)
+        if client is not None:
+            return client
+        try:
+            from supabase import create_client
 
-                    self._supabase = create_client(
-                        settings.supabase_url,
-                        settings.supabase_secret_key,
-                    )
-                except Exception as exc:
-                    raise BackendUnavailableError() from exc
-        return self._supabase
+            client = create_client(
+                settings.supabase_url,
+                settings.supabase_secret_key,
+            )
+            self._thread_clients.supabase = client
+            return client
+        except Exception as exc:
+            raise BackendUnavailableError() from exc
 
     def resolve_actor(self, authorization: str | None) -> str:
         if settings.demo_mode:
@@ -270,24 +277,37 @@ class CareCoordinationService:
             raise UnauthorizedError()
         if not self.uses_supabase:
             raise BackendUnavailableError()
+        token_key = sha256(token.encode("utf-8")).digest()
         try:
             # The synchronous Supabase client owns shared HTTP transports.
             # Serialize access so concurrent page hydration cannot corrupt a
-            # request while another endpoint verifies a session.
+            # request while another endpoint verifies a session. A short-lived,
+            # hashed token cache prevents every parallel page read from paying
+            # for the same remote profile lookup.
             with self._lock:
+                now = monotonic()
+                cached = self._actor_cache.get(token_key)
+                if cached and cached[1] > now:
+                    return cached[0]
                 response = self._client().auth.get_user(token)
-            user = getattr(response, "user", None)
-            user_id = getattr(user, "id", None)
+                user = getattr(response, "user", None)
+                user_id = getattr(user, "id", None)
+                if not user_id:
+                    raise UnauthorizedError("The bearer token could not be verified.")
+                self._actor_cache = {
+                    key: value for key, value in self._actor_cache.items() if value[1] > now
+                }
+                self._actor_cache[token_key] = (
+                    str(user_id),
+                    now + ACTOR_CACHE_TTL_SECONDS,
+                )
         except Exception as exc:
             raise UnauthorizedError("The bearer token could not be verified.") from exc
-        if not user_id:
-            raise UnauthorizedError("The bearer token could not be verified.")
         return str(user_id)
 
     def _execute(self, query: Any) -> list[dict[str, Any]]:
         try:
-            with self._lock:
-                response = query.execute()
+            response = query.execute()
             return list(response.data or [])
         except Exception as exc:
             raise BackendUnavailableError() from exc
@@ -302,17 +322,28 @@ class CareCoordinationService:
 
     def _assert_member(self, circle_id: str, actor_id: str) -> None:
         if self.uses_supabase:
-            rows = self._execute(
-                self._client()
-                .table("circle_members")
-                .select("profile_id")
-                .eq("circle_id", circle_id)
-                .eq("profile_id", actor_id)
-                .eq("is_active", True)
-                .limit(1)
-            )
-            if not rows:
-                raise ForbiddenError()
+            cache_key = (circle_id, actor_id)
+            with self._lock:
+                now = monotonic()
+                if self._membership_cache.get(cache_key, 0) > now:
+                    return
+                rows = self._execute(
+                    self._client()
+                    .table("circle_members")
+                    .select("profile_id")
+                    .eq("circle_id", circle_id)
+                    .eq("profile_id", actor_id)
+                    .eq("is_active", True)
+                    .limit(1)
+                )
+                if not rows:
+                    raise ForbiddenError()
+                self._membership_cache = {
+                    key: expires_at
+                    for key, expires_at in self._membership_cache.items()
+                    if expires_at > now
+                }
+                self._membership_cache[cache_key] = now + MEMBERSHIP_CACHE_TTL_SECONDS
             return
         if not settings.demo_mode:
             raise BackendUnavailableError()
@@ -471,7 +502,9 @@ class CareCoordinationService:
         reporter = (
             actor_id
             if self.uses_supabase
-            else str(payload.reported_by) if payload.reported_by else actor_id
+            else str(payload.reported_by)
+            if payload.reported_by
+            else actor_id
         )
         self._assert_person_in_circle(circle, reporter)
         self._assert_person_in_circle(circle, str(payload.subject_id))
@@ -647,11 +680,7 @@ class CareCoordinationService:
 
         if self.uses_supabase:
             rows = self._execute(
-                self._client()
-                .table("tasks")
-                .update(fields)
-                .eq("id", task)
-                .eq("circle_id", circle)
+                self._client().table("tasks").update(fields).eq("id", task).eq("circle_id", circle)
             )
             if not rows:
                 raise NotFoundError("Task")
@@ -668,9 +697,7 @@ class CareCoordinationService:
             "availability", circle_id, actor_id, "starts_at", limit, offset
         )
 
-    def get_availability(
-        self, circle_id: UUID, actor_id: str
-    ) -> list[dict[str, Any]]:
+    def get_availability(self, circle_id: UUID, actor_id: str) -> list[dict[str, Any]]:
         return self.list_availability(circle_id, actor_id, 100, 0)
 
     def list_scheduled_items(
@@ -704,25 +731,15 @@ class CareCoordinationService:
         circle = str(circle_id)
         self._assert_member(circle, actor_id)
         if self.uses_supabase:
-            query = (
-                self._client()
-                .table(table)
-                .select("*")
-                .eq("circle_id", circle)
-            )
+            query = self._client().table(table).select("*").eq("circle_id", circle)
             if starts_after is not None:
                 query = query.gte(order_by, _iso(starts_after))
-            return self._execute(
-                query.order(order_by).range(offset, offset + limit - 1)
-            )
+            return self._execute(query.order(order_by).range(offset, offset + limit - 1))
         rows = [
             deepcopy(row)
             for row in self._state[table].values()
             if row["circle_id"] == circle
-            and (
-                starts_after is None
-                or datetime.fromisoformat(row[order_by]) >= starts_after
-            )
+            and (starts_after is None or datetime.fromisoformat(row[order_by]) >= starts_after)
         ]
         rows.sort(key=lambda row: row[order_by])
         return rows[offset : offset + limit]
@@ -777,9 +794,7 @@ class CareCoordinationService:
                 .range(offset, offset + limit - 1)
             )
         rows = [
-            deepcopy(row)
-            for row in self._state["memories"].values()
-            if row["circle_id"] == circle
+            deepcopy(row) for row in self._state["memories"].values() if row["circle_id"] == circle
         ]
         rows.sort(key=lambda row: row["created_at"], reverse=True)
         return rows[offset : offset + limit]
@@ -799,9 +814,7 @@ class CareCoordinationService:
         return self.update_task(task_id, actor_id, TaskUpdate(assigned_to=member_id))
 
     def complete_task(self, task_id: UUID, actor_id: str) -> dict[str, Any]:
-        return self.update_task(
-            task_id, actor_id, TaskUpdate(status=TaskStatus.COMPLETED)
-        )
+        return self.update_task(task_id, actor_id, TaskUpdate(status=TaskStatus.COMPLETED))
 
     @staticmethod
     def _member_reference(
@@ -833,12 +846,17 @@ class CareCoordinationService:
     ) -> dict[str, list[dict[str, Any]]]:
         now = _utc_now()
         window_start = since or now - timedelta(hours=HANDOFF_DEFAULT_WINDOW_HOURS)
-        events = self.list_events(circle_id, actor_id, 100, 0, window_start)
-        tasks = self.list_tasks(circle_id, actor_id, 100, 0)
-        scheduled = self.list_scheduled_items(circle_id, actor_id, 100, 0, now)
-        members = {
-            row["profile_id"]: row for row in self.list_members(circle_id, actor_id)
-        }
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="careloop-context") as pool:
+            events_future = pool.submit(self.list_events, circle_id, actor_id, 100, 0, window_start)
+            tasks_future = pool.submit(self.list_tasks, circle_id, actor_id, 100, 0)
+            scheduled_future = pool.submit(
+                self.list_scheduled_items, circle_id, actor_id, 100, 0, now
+            )
+            members_future = pool.submit(self.list_members, circle_id, actor_id)
+            events = events_future.result()
+            tasks = tasks_future.result()
+            scheduled = scheduled_future.result()
+            members = {row["profile_id"]: row for row in members_future.result()}
         enriched_events = [
             {
                 **row,

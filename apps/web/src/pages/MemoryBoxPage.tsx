@@ -4,6 +4,7 @@ import { Plus, Play, Camera, Pause, Heart, Sparkles, Music } from 'lucide-react'
 import { useDemoProfile } from '../features/demo/DemoContext';
 import {
   listMemories,
+  cachedMemories,
   createMemory,
   DEMO_CIRCLE_ID,
   DEMO_AMMA_ID,
@@ -36,13 +37,13 @@ export function MemoryBoxPage() {
   const { activeProfile, authStatus } = useDemoProfile();
   const [activeTab, setActiveTab] = useState<MemoryTab>('All');
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [memories, setMemories] = useState<ApiMemory[]>([]);
+  const [memories, setMemories] = useState<ApiMemory[]>(() => cachedMemories(activeProfile.id) ?? []);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newYear, setNewYear] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newKind, setNewKind] = useState<'story' | 'photo' | 'voice'>('story');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachedMemories(activeProfile.id));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,11 +51,12 @@ export function MemoryBoxPage() {
   useEffect(() => {
     let cancelled = false;
     let memSub: ReturnType<typeof subscribeToMemories> = null;
-    setMemories([]);
-    setLoading(true);
+    const currentMemories = cachedMemories(activeProfile.id);
+    setMemories(currentMemories ?? []);
+    setLoading(!currentMemories);
     setError(null);
     if (authStatus !== 'authenticated') {
-      setLoading(authStatus === 'loading');
+      setLoading(authStatus === 'loading' && !currentMemories);
       return;
     }
     listMemories(activeProfile.id)

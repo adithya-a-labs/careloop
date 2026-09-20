@@ -2,6 +2,23 @@ import type { DemoProfile, DemoProfileId } from './mock-data';
 import { ensureDemoSession, isRealMode } from './supabase';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const READ_CACHE_TTL_MS = 60_000;
+
+interface ReadCacheEntry {
+  value: unknown;
+  storedAt: number;
+}
+
+const readCache = new Map<string, ReadCacheEntry>();
+const readRequests = new Map<string, Promise<unknown>>();
+
+function readCacheKey(path: string, profileId: DemoProfileId) {
+  return `${profileId}:${path}`;
+}
+
+export function peekApiCache<T>(path: string, profileId: DemoProfileId): T | undefined {
+  return readCache.get(readCacheKey(path, profileId))?.value as T | undefined;
+}
 
 export const DEMO_CIRCLE_ID = '20000000-0000-0000-0000-000000000001';
 export const DEMO_AMMA_ID = '10000000-0000-0000-0000-000000000001';
@@ -32,7 +49,7 @@ export const UUID_TO_NAME: Record<string, string> = {
 
 // ─── API Core ────────────────────────────────────────────────
 
-export async function api<T>(
+async function requestApi<T>(
   path: string,
   init?: RequestInit,
   profileId: DemoProfileId = 'maya',
@@ -60,6 +77,36 @@ export async function api<T>(
     throw new Error(`CareLoop API request failed (${response.status}): ${errorDetail}`);
   }
   return response.json() as Promise<T>;
+}
+
+export async function api<T>(
+  path: string,
+  init?: RequestInit,
+  profileId: DemoProfileId = 'maya',
+): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  if (method !== 'GET') {
+    const result = await requestApi<T>(path, init, profileId);
+    readCache.clear();
+    return result;
+  }
+
+  const key = readCacheKey(path, profileId);
+  const cached = readCache.get(key);
+  if (cached && Date.now() - cached.storedAt < READ_CACHE_TTL_MS) {
+    return cached.value as T;
+  }
+  const pending = readRequests.get(key);
+  if (pending) return pending as Promise<T>;
+
+  const request = requestApi<T>(path, init, profileId)
+    .then((value) => {
+      readCache.set(key, { value, storedAt: Date.now() });
+      return value;
+    })
+    .finally(() => readRequests.delete(key));
+  readRequests.set(key, request);
+  return request;
 }
 
 // ─── Voice Context ───────────────────────────────────────────
@@ -111,6 +158,17 @@ export interface CoordinationSuggestion {
   requires_confirmation: boolean;
 }
 
+export interface ContextQueryResult {
+  heading: 'CARELOOP' | 'BEFORE YOUR VISIT' | 'TODAY' | 'YOUR TASKS';
+  answer: string;
+  sources: Array<{
+    kind: 'care_event' | 'task' | 'scheduled_item' | 'member' | 'availability';
+    id: string;
+    label: string;
+    occurred_at: string | null;
+  }>;
+}
+
 export interface VoiceTurnPreview {
   user_id: string;
   circle_id: string;
@@ -123,7 +181,7 @@ export interface VoiceTurnPreview {
   preferred_language: string;
   source: 'voice';
   text: string;
-  intent: 'care_update' | 'catch_up' | 'coordination' | 'memory' | 'unknown';
+  intent: 'care_update' | 'catch_up' | 'coordination' | 'memory' | 'context_query' | 'unknown';
   extracted_events?: ExtractedCareEvent[];
   handoff_summary?: HandoffSummary;
   coordination_suggestion?: CoordinationSuggestion;
@@ -137,11 +195,12 @@ export interface VoiceTurnPreview {
     confidence: number;
   };
   memory_create?: MemoryCreatePayload;
+  context_query?: ContextQueryResult;
   message?: string;
 }
 
 export interface VoiceTurnResult {
-  tool: 'record_care_event' | 'draft_task' | 'draft_handoff' | 'save_memory' | 'no_action';
+  tool: 'record_care_event' | 'draft_task' | 'draft_handoff' | 'read_context' | 'save_memory' | 'no_action';
   status: 'draft' | 'ready' | 'no_action';
   preview: VoiceTurnPreview;
   requires_confirmation: boolean;
@@ -159,6 +218,7 @@ export function routeVoiceTurn(
       body: JSON.stringify({
         transcript,
         ...voiceContext(profile),
+        speaker_name: profile.displayName,
         referenced_task_id: referencedTaskId ?? null,
       }),
     },
@@ -230,6 +290,10 @@ export async function listCareEvents(profileId: DemoProfileId = 'maya', circleId
   return api<CareEvent[]>(`/api/v1/circles/${circleId}/events?limit=50`, undefined, profileId);
 }
 
+export function cachedCareEvents(profileId: DemoProfileId, circleId = DEMO_CIRCLE_ID) {
+  return peekApiCache<CareEvent[]>(`/api/v1/circles/${circleId}/events?limit=50`, profileId);
+}
+
 // ─── Tasks ───────────────────────────────────────────────────
 
 export interface ApiTask {
@@ -269,6 +333,10 @@ export interface TaskUpdatePayload {
 
 export async function listTasks(profileId: DemoProfileId = 'maya', circleId = DEMO_CIRCLE_ID): Promise<ApiTask[]> {
   return api<ApiTask[]>(`/api/v1/circles/${circleId}/tasks?limit=50`, undefined, profileId);
+}
+
+export function cachedTasks(profileId: DemoProfileId, circleId = DEMO_CIRCLE_ID) {
+  return peekApiCache<ApiTask[]>(`/api/v1/circles/${circleId}/tasks?limit=50`, profileId);
 }
 
 export async function createTask(payload: TaskCreatePayload, profileId: DemoProfileId = 'maya', circleId = DEMO_CIRCLE_ID): Promise<ApiTask> {
@@ -318,6 +386,10 @@ export async function getHandoffContext(profileId: DemoProfileId = 'maya', circl
   return api<HandoffContext>(`/api/v1/circles/${circleId}/handoff-context${query}`, undefined, profileId);
 }
 
+export function cachedHandoffContext(profileId: DemoProfileId, circleId = DEMO_CIRCLE_ID) {
+  return peekApiCache<HandoffContext>(`/api/v1/circles/${circleId}/handoff-context`, profileId);
+}
+
 // ─── Availability & Members ──────────────────────────────────
 
 export interface MemberAvailability {
@@ -331,6 +403,10 @@ export interface MemberAvailability {
 
 export async function listAvailability(profileId: DemoProfileId = 'maya', circleId = DEMO_CIRCLE_ID): Promise<MemberAvailability[]> {
   return api<MemberAvailability[]>(`/api/v1/circles/${circleId}/availability`, undefined, profileId);
+}
+
+export function cachedAvailability(profileId: DemoProfileId, circleId = DEMO_CIRCLE_ID) {
+  return peekApiCache<MemberAvailability[]>(`/api/v1/circles/${circleId}/availability`, profileId);
 }
 
 export interface CircleMember {
@@ -348,8 +424,16 @@ export async function listCircleMembers(profileId: DemoProfileId = 'maya', circl
   return api<CircleMember[]>(`/api/v1/circles/${circleId}/members`, undefined, profileId);
 }
 
+export function cachedCircleMembers(profileId: DemoProfileId, circleId = DEMO_CIRCLE_ID) {
+  return peekApiCache<CircleMember[]>(`/api/v1/circles/${circleId}/members`, profileId);
+}
+
 export async function listScheduledItems(profileId: DemoProfileId = 'maya', circleId = DEMO_CIRCLE_ID): Promise<ScheduledItem[]> {
   return api<ScheduledItem[]>(`/api/v1/circles/${circleId}/scheduled-items`, undefined, profileId);
+}
+
+export function cachedScheduledItems(profileId: DemoProfileId, circleId = DEMO_CIRCLE_ID) {
+  return peekApiCache<ScheduledItem[]>(`/api/v1/circles/${circleId}/scheduled-items`, profileId);
 }
 
 // ─── Memories ────────────────────────────────────────────────
@@ -389,6 +473,10 @@ export async function createMemory(payload: MemoryCreatePayload, profileId: Demo
 
 export async function listMemories(profileId: DemoProfileId = 'maya', circleId = DEMO_CIRCLE_ID): Promise<ApiMemory[]> {
   return api<ApiMemory[]>(`/api/v1/circles/${circleId}/memories?limit=50`, undefined, profileId);
+}
+
+export function cachedMemories(profileId: DemoProfileId, circleId = DEMO_CIRCLE_ID) {
+  return peekApiCache<ApiMemory[]>(`/api/v1/circles/${circleId}/memories?limit=50`, profileId);
 }
 
 // ─── WebRTC Live Voice ───────────────────────────────────────

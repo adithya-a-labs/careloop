@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { Clock } from 'lucide-react';
 import { useDemoProfile } from '../features/demo/DemoContext';
-import { DEMO_CIRCLE_ID, listCareEvents, type CareEvent } from '../lib/api';
+import { cachedCareEvents, DEMO_CIRCLE_ID, listCareEvents, type CareEvent } from '../lib/api';
 import type { TimelineEvent } from '../lib/mock-data';
 import {
   removeRealtimeChannel,
@@ -85,17 +85,19 @@ export function TimelinePage() {
     month: 'short',
     year: 'numeric',
   }).format(new Date());
-  const [events, setEvents] = useState<TimelineEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [events, setEvents] = useState<TimelineEvent[]>(() => (cachedCareEvents(activeProfile.id) ?? []).map(toTimelineEvent));
+  const [isLoading, setIsLoading] = useState(() => !cachedCareEvents(activeProfile.id));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
+    const currentEvents = cachedCareEvents(activeProfile.id);
+    setEvents((currentEvents ?? []).map(toTimelineEvent));
+    setIsLoading(!currentEvents);
     setErrorMessage(null);
     let channel: ReturnType<typeof subscribeToCareEvents> = null;
     if (authStatus !== 'authenticated') {
-      setIsLoading(authStatus === 'loading');
+      setIsLoading(authStatus === 'loading' && !currentEvents);
       return;
     }
     listCareEvents(activeProfile.id)

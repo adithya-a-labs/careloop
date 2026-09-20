@@ -8,11 +8,11 @@ from app.schemas.common import CareEventExtractionResult, ExtractedCareEvent
 
 class LLMService:
     """Backend-only provider adapter. No SQL or unrestricted function execution is exposed."""
-    
+
     @property
     def configured(self) -> bool:
         return bool(settings.openai_api_key)
-    
+
     def _get_client(self) -> Any:
         from openai import OpenAI
 
@@ -52,9 +52,7 @@ class LLMService:
             for phrase in ("didn't eat much", "did not eat much", "ate little", "ate less")
         ):
             meal = next(
-                meal
-                for meal in ("breakfast", "lunch", "dinner", "snack")
-                if meal in lowered
+                meal for meal in ("breakfast", "lunch", "dinner", "snack") if meal in lowered
             )
             events.append(
                 ExtractedCareEvent(
@@ -66,10 +64,28 @@ class LLMService:
             )
         # Mood extraction for explicit feelings
         if any(phrase in lowered for phrase in ("feeling", "feel ", "felt ")) and any(
-            word in lowered for word in ("lonely", "sad", "happy", "anxious", "worried", "depressed", "down", "upset", "good", "great", "okay", "fine", "well")
+            word in lowered
+            for word in (
+                "lonely",
+                "sad",
+                "happy",
+                "anxious",
+                "worried",
+                "depressed",
+                "down",
+                "upset",
+                "good",
+                "great",
+                "okay",
+                "fine",
+                "well",
+            )
         ):
             valence = "neutral"
-            if any(word in lowered for word in ("lonely", "sad", "anxious", "worried", "depressed", "down", "upset")):
+            if any(
+                word in lowered
+                for word in ("lonely", "sad", "anxious", "worried", "depressed", "down", "upset")
+            ):
                 valence = "negative"
             elif any(word in lowered for word in ("happy", "good", "great", "well")):
                 valence = "positive"
@@ -82,12 +98,33 @@ class LLMService:
                 )
             )
 
+        # Some supported voice prompts intentionally omit a meal name or use
+        # "log" language. Preserve the user's exact statement as a grounded
+        # care note instead of inventing structured details.
+        if not events and any(
+            phrase in lowered
+            for phrase in (
+                "ate well",
+                "ate poorly",
+                "log today's visit",
+                "log todays visit",
+            )
+        ):
+            events.append(
+                ExtractedCareEvent(
+                    type="note",
+                    data={"content": transcript},
+                    confidence=0.9,
+                    **shared,
+                )
+            )
+
         return CareEventExtractionResult(events=events)
-    
+
     def _load_prompt(self, prompt_name: str) -> str:
         prompt_path = Path(__file__).parent.parent.parent / "prompts" / f"{prompt_name}.txt"
         return prompt_path.read_text(encoding="utf-8")
-    
+
     def extract_care_events(
         self,
         transcript: str,
@@ -96,7 +133,7 @@ class LLMService:
         role: str,
         relationship: str,
         patient_name: str,
-        preferred_language: str = "English"
+        preferred_language: str = "English",
     ) -> CareEventExtractionResult:
         """Extract structured care events from a transcript."""
         if not self.configured:
@@ -107,9 +144,9 @@ class LLMService:
                     patient_id=patient_id,
                 )
             return CareEventExtractionResult(events=[])
-        
+
         prompt = self._load_prompt("care_event_extraction")
-        
+
         context = {
             "transcript": transcript,
             "speaker_id": speaker_id,
@@ -117,16 +154,16 @@ class LLMService:
             "role": role,
             "relationship": relationship,
             "patient_name": patient_name,
-            "preferred_language": preferred_language
+            "preferred_language": preferred_language,
         }
-        
+
         client = self._get_client()
-        
+
         response = client.responses.parse(
             model="gpt-5.6-luna",
             input=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": json.dumps(context, ensure_ascii=False)}
+                {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
             ],
             text_format=CareEventExtractionResult,
         )
@@ -157,14 +194,21 @@ class LLMService:
             model="gpt-5.6-luna",
             input=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": json.dumps({
-                    "events_since_last_seen": events,
-                    "pending_tasks": pending_tasks,
-                    "completed_tasks": completed_tasks,
-                    "upcoming": upcoming,
-                    "speaker_name": speaker_name,
-                    "patient_name": patient_name,
-                }, ensure_ascii=False, default=str)},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "events_since_last_seen": events,
+                            "pending_tasks": pending_tasks,
+                            "completed_tasks": completed_tasks,
+                            "upcoming": upcoming,
+                            "speaker_name": speaker_name,
+                            "patient_name": patient_name,
+                        },
+                        ensure_ascii=False,
+                        default=str,
+                    ),
+                },
             ],
             text_format=HandoffSummary,
         )
@@ -189,11 +233,18 @@ class LLMService:
             model="gpt-5.6-luna",
             input=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": json.dumps({
-                    "transcript": transcript,
-                    "context": context,
-                    "conversation_history": conversation_history or [],
-                }, ensure_ascii=False, default=str)},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "transcript": transcript,
+                            "context": context,
+                            "conversation_history": conversation_history or [],
+                        },
+                        ensure_ascii=False,
+                        default=str,
+                    ),
+                },
             ],
             text_format=CoordinationSuggestion,
         )
@@ -218,11 +269,17 @@ class LLMService:
             model="gpt-5.6-luna",
             input=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": json.dumps({
-                    "transcript": transcript,
-                    "speaker_name": speaker_name,
-                    "patient_name": patient_name,
-                }, ensure_ascii=False)},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "transcript": transcript,
+                            "speaker_name": speaker_name,
+                            "patient_name": patient_name,
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
             ],
             text_format=MemoryExtractionResult,
         )

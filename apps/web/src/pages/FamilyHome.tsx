@@ -7,6 +7,9 @@ import {
   DEMO_CIRCLE_ID,
   DEMO_RAHUL_ID,
   PROFILE_UUIDS,
+  cachedAvailability,
+  cachedHandoffContext,
+  cachedTasks,
   getHandoffContext,
   listAvailability,
   listTasks,
@@ -37,12 +40,12 @@ function taskOccursDuring(task: ApiTask, slot: MemberAvailability) {
 export function FamilyHomePage() {
   const navigate = useNavigate();
   const { activeProfile, authStatus } = useDemoProfile();
-  const [handoff, setHandoff] = useState<HandoffContext | null>(null);
+  const [handoff, setHandoff] = useState<HandoffContext | null>(() => cachedHandoffContext(activeProfile.id) ?? null);
   const [handoffSummary, setHandoffSummary] = useState<HandoffSummary | null>(null);
-  const [availability, setAvailability] = useState<MemberAvailability[]>([]);
-  const [tasks, setTasks] = useState<ApiTask[]>([]);
+  const [availability, setAvailability] = useState<MemberAvailability[]>(() => cachedAvailability(activeProfile.id) ?? []);
+  const [tasks, setTasks] = useState<ApiTask[]>(() => cachedTasks(activeProfile.id) ?? []);
   const [suggestions, setSuggestions] = useState<Record<string, CoordinationSuggestion>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !(cachedHandoffContext(activeProfile.id) && cachedAvailability(activeProfile.id) && cachedTasks(activeProfile.id)));
   const [catchingUp, setCatchingUp] = useState(false);
   const [coordinatingTaskId, setCoordinatingTaskId] = useState<string | null>(null);
   const [assigningTaskId, setAssigningTaskId] = useState<string | null>(null);
@@ -65,17 +68,21 @@ export function FamilyHomePage() {
     let taskChannel: ReturnType<typeof subscribeToTasks> = null;
     let eventChannel: ReturnType<typeof subscribeToCareEvents> = null;
 
-    setLoading(true);
+    const currentHandoff = cachedHandoffContext(activeProfile.id);
+    const currentAvailability = cachedAvailability(activeProfile.id);
+    const currentTasks = cachedTasks(activeProfile.id);
+    const hasCurrentData = Boolean(currentHandoff && currentAvailability && currentTasks);
+    setLoading(!hasCurrentData);
     setError(null);
-    setHandoff(null);
+    setHandoff(currentHandoff ?? null);
     setHandoffSummary(null);
-    setAvailability([]);
-    setTasks([]);
+    setAvailability(currentAvailability ?? []);
+    setTasks(currentTasks ?? []);
     setSuggestions({});
     setConfirmedTaskId(null);
 
     if (authStatus !== 'authenticated') {
-      setLoading(authStatus === 'loading');
+      setLoading(authStatus === 'loading' && !hasCurrentData);
       return;
     }
 
