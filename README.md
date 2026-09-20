@@ -525,7 +525,7 @@ careloop/
 └── package.json             # Workspace commands
 ```
 
-## What we built during the hackathon
+## What I built during the hackathon
 
 The completed vertical slice is the point:
 
