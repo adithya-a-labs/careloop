@@ -36,7 +36,7 @@ const VOICE_COPY: Record<CareExperience, VoiceExperienceCopy> = {
     prompts: [
       'What should I know before my visit?',
       'Log today’s visit.',
-      'Mark my evening medicine check complete.',
+      'Mark my visit complete.',
       'Amma ate well today.',
     ],
   },

@@ -24,11 +24,11 @@ def test_demo_dataset_has_expected_personas_and_counts() -> None:
 
     assert len(dataset.profiles) == 4
     assert len(dataset.members) == 4
-    assert len(dataset.care_events) == 10
-    assert len(dataset.tasks) == 5
-    assert len(dataset.availability) == 3
-    assert len(dataset.scheduled_items) == 4
-    assert len(dataset.memories) == 3
+    assert len(dataset.care_events) == 24
+    assert len(dataset.tasks) == 9
+    assert len(dataset.availability) == 4
+    assert len(dataset.scheduled_items) == 6
+    assert len(dataset.memories) == 6
     assert {row["circle_id"] for row in dataset.members} == {DEMO_CIRCLE_ID}
 
     members = {row["profile_id"]: row for row in dataset.members}
@@ -40,7 +40,9 @@ def test_demo_dataset_has_expected_personas_and_counts() -> None:
 
 def test_prescription_is_unassigned_and_covered_only_by_rahuls_window() -> None:
     dataset = build_demo_dataset(FIXED_NOW)
-    prescription = next(row for row in dataset.tasks if row["id"] == PRESCRIPTION_TASK_ID)
+    prescription = next(
+        row for row in dataset.tasks if row["id"] == PRESCRIPTION_TASK_ID
+    )
     rahul_window = next(
         row for row in dataset.availability if row["id"] == RAHUL_AVAILABILITY_ID
     )
@@ -91,7 +93,7 @@ def test_seed_ids_are_unique_and_timestamps_move_with_reset_day() -> None:
     first_due = next(row for row in first.tasks if row["id"] == PRESCRIPTION_TASK_ID)[
         "due_at"
     ]
-    next_due = next(
-        row for row in next_day.tasks if row["id"] == PRESCRIPTION_TASK_ID
-    )["due_at"]
+    next_due = next(row for row in next_day.tasks if row["id"] == PRESCRIPTION_TASK_ID)[
+        "due_at"
+    ]
     assert _parse(next_due) - _parse(first_due) == timedelta(days=1)

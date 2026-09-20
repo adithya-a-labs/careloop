@@ -41,6 +41,7 @@ def _resolve_task_reference(
     tasks: list[dict[str, Any]],
     history: list[dict[str, Any]] | None,
     referenced_task_id: str | None = None,
+    actor_id: str | None = None,
 ) -> str | None:
     """Resolve task reference from transcript or conversation history."""
     lowered = transcript.lower()
@@ -52,8 +53,17 @@ def _resolve_task_reference(
     ):
         return referenced_task_id
 
-    # Explicit task title mention
-    for task in tasks:
+    pending_tasks = [
+        task for task in tasks if task.get("status") in ("pending", "open", "in_progress")
+    ]
+    candidates = pending_tasks
+    if "my" in lowered and actor_id:
+        actor_tasks = [task for task in pending_tasks if task.get("assigned_to") == actor_id]
+        if actor_tasks:
+            candidates = actor_tasks
+
+    # Explicit task title mention. Never resolve an already-completed task.
+    for task in candidates:
         title = task.get("title", "").lower()
         if title and any(word in lowered for word in title.split() if len(word) > 3):
             return task["id"]
@@ -62,16 +72,14 @@ def _resolve_task_reference(
     if history:
         for msg in reversed(history):
             content = msg.get("content", "").lower()
-            for task in tasks:
+            for task in pending_tasks:
                 title = task.get("title", "").lower()
                 if title and any(word in content for word in title.split() if len(word) > 3):
                     return task["id"]
 
     # Default to first pending task if "that"/"it" used
-    if any(word in lowered for word in ("that", "it", "the task")):
-        pending = [t for t in tasks if t.get("status") in ("pending", "open")]
-        if pending:
-            return pending[0]["id"]
+    if pending_tasks and any(word in lowered for word in ("that", "it", "the task")):
+        return pending_tasks[0]["id"]
 
     return None
 
@@ -151,9 +159,7 @@ def coordinate(
         ],
     }
 
-    deterministic = _coordinate_demo(
-        transcript, context, conversation_history, referenced_task_id
-    )
+    deterministic = _coordinate_demo(transcript, context, conversation_history, referenced_task_id)
     lowered = transcript.lower()
     if not _llm.configured or any(
         phrase in lowered
@@ -211,7 +217,11 @@ def _coordinate_demo(
 
     name_to_id = _extract_name_references(transcript, members)
     task_id = _resolve_task_reference(
-        transcript, tasks, history, referenced_task_id
+        transcript,
+        tasks,
+        history,
+        referenced_task_id,
+        context.get("actor_id"),
     )
 
     # "Who can pick up the prescription tomorrow?"
@@ -235,25 +245,23 @@ def _coordinate_demo(
         if prescription_task:
             due_at = prescription_task.get("due_at")
             target = (
-                datetime.fromisoformat(due_at)
-                if due_at
-                else datetime.now(UTC) + timedelta(days=1)
+                datetime.fromisoformat(due_at) if due_at else datetime.now(UTC) + timedelta(days=1)
             )
             available_members: list[dict[str, Any]] = []
             for avail in availability:
                 starts_at = datetime.fromisoformat(avail["starts_at"])
                 ends_at = datetime.fromisoformat(avail["ends_at"])
                 if starts_at <= target <= ends_at:
-                    member = next((m for m in members if m["profile_id"] == avail["profile_id"]), None)
+                    member = next(
+                        (m for m in members if m["profile_id"] == avail["profile_id"]), None
+                    )
                     if member:
                         available_members.append(member)
 
             if available_members:
                 names = ", ".join(member["display_name"] for member in available_members)
                 only_assignee = (
-                    available_members[0]["profile_id"]
-                    if len(available_members) == 1
-                    else None
+                    available_members[0]["profile_id"] if len(available_members) == 1 else None
                 )
                 return CoordinationSuggestion(
                     action="suggest_assignee",

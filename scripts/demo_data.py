@@ -42,6 +42,7 @@ DEMO_PROFILE_IDS = (
 PRESCRIPTION_TASK_ID = "40000000-0000-0000-0000-000000000001"
 EVENING_CHECK_TASK_ID = "40000000-0000-0000-0000-000000000002"
 RAHUL_AVAILABILITY_ID = "70000000-0000-0000-0000-000000000001"
+ANU_VISIT_TASK_ID = "40000000-0000-0000-0000-000000000006"
 
 RESET_DELETE_ORDER = (
     "handoffs",
@@ -117,10 +118,18 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
     previous_day = story_day - timedelta(days=1)
     two_days_ago = story_day - timedelta(days=2)
     three_days_ago = story_day - timedelta(days=3)
+    four_days_ago = story_day - timedelta(days=4)
+    five_days_ago = story_day - timedelta(days=5)
+    six_days_ago = story_day - timedelta(days=6)
+    seven_days_ago = story_day - timedelta(days=7)
+    eight_days_ago = story_day - timedelta(days=8)
+    nine_days_ago = story_day - timedelta(days=9)
 
     # All schedule cards are guaranteed to be in the future. If a reset happens
     # after the first visit window, the whole daily sequence rolls to tomorrow.
-    schedule_day = today if local_now < _at(today, 14, 45) else today + timedelta(days=1)
+    schedule_day = (
+        today if local_now < _at(today, 14, 45) else today + timedelta(days=1)
+    )
     tomorrow = today + timedelta(days=1)
 
     profiles = [
@@ -203,7 +212,11 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
             occurred_at=_at(story_day, 7, 45),
             reported_by=DEMO_AMMA_ID,
             event_type="sleep",
-            event_data={"quality": "okay", "duration_hours": 6, "note": "slightly restless"},
+            event_data={
+                "quality": "okay",
+                "duration_hours": 6,
+                "note": "slightly restless",
+            },
             source="voice",
             transcript="I slept for about six hours and felt a little restless, but I am okay.",
             confidence=0.96,
@@ -294,6 +307,141 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
             transcript="I slept well that night.",
             confidence=0.98,
         ),
+        _event(
+            11,
+            occurred_at=_at(four_days_ago, 8, 20),
+            reported_by=DEMO_AMMA_ID,
+            event_type="meal",
+            event_data={"meal": "breakfast", "intake": "normal"},
+            source="voice",
+            transcript="Breakfast was normal and I ate comfortably.",
+            confidence=0.98,
+        ),
+        _event(
+            12,
+            occurred_at=_at(four_days_ago, 14, 15),
+            reported_by=DEMO_AMMA_ID,
+            event_type="rest",
+            event_data={"activity": "afternoon rest", "status": "completed"},
+            source="voice",
+            transcript="I rested for a little while in the afternoon.",
+            confidence=0.96,
+        ),
+        _event(
+            13,
+            occurred_at=_at(five_days_ago, 19, 20),
+            reported_by=DEMO_MAYA_ID,
+            event_type="meal",
+            event_data={"meal": "dinner", "intake": "normal"},
+            source="manual",
+            transcript="Dinner was normal and Amma ate with us.",
+        ),
+        _event(
+            14,
+            occurred_at=_at(five_days_ago, 22),
+            reported_by=DEMO_AMMA_ID,
+            event_type="sleep",
+            event_data={"quality": "good"},
+            source="voice",
+            transcript="I slept well and woke up feeling rested.",
+            confidence=0.98,
+        ),
+        _event(
+            15,
+            occurred_at=_at(six_days_ago, 16, 30),
+            reported_by=DEMO_RAHUL_ID,
+            event_type="visit",
+            event_data={"visit_type": "family visit", "status": "completed"},
+            source="manual",
+            transcript="Rahul stopped by for a relaxed family visit.",
+        ),
+        _event(
+            16,
+            occurred_at=_at(six_days_ago, 11, 10),
+            reported_by=DEMO_MAYA_ID,
+            event_type="check_in",
+            event_data={"kind": "hydration reminder", "status": "completed"},
+            source="manual",
+            transcript="Maya checked in and Amma had water nearby.",
+        ),
+        _event(
+            17,
+            occurred_at=_at(seven_days_ago, 10, 30),
+            reported_by=DEMO_MAYA_ID,
+            event_type="check_in",
+            event_data={"method": "phone", "status": "comfortable"},
+            source="manual",
+            transcript="Maya called and Amma sounded comfortable.",
+        ),
+        _event(
+            18,
+            occurred_at=_at(seven_days_ago, 20),
+            reported_by=DEMO_ANU_ID,
+            event_type="medication",
+            event_data={"routine": "evening check", "status": "completed"},
+            source="manual",
+            transcript="The usual evening medicine check was completed.",
+        ),
+        _event(
+            19,
+            occurred_at=_at(eight_days_ago, 15),
+            reported_by=DEMO_ANU_ID,
+            event_type="visit",
+            event_data={"visit_type": "professional home visit", "status": "completed"},
+            source="manual",
+            transcript="Anu completed the planned home visit and shared the routine update.",
+        ),
+        _event(
+            20,
+            occurred_at=_at(eight_days_ago, 17, 15),
+            reported_by=DEMO_RAHUL_ID,
+            event_type="activity",
+            event_data={"activity": "short walk", "intensity": "light"},
+            source="manual",
+            transcript="Amma took a short walk with Rahul in the evening.",
+        ),
+        _event(
+            21,
+            occurred_at=_at(nine_days_ago, 13),
+            reported_by=DEMO_AMMA_ID,
+            event_type="meal",
+            event_data={
+                "meal": "lunch",
+                "intake": "slightly low",
+                "follow_up": "rested",
+            },
+            source="voice",
+            transcript="Lunch was a little light, so I rested afterwards.",
+            confidence=0.96,
+        ),
+        _event(
+            22,
+            occurred_at=_at(nine_days_ago, 16),
+            reported_by=DEMO_RAHUL_ID,
+            event_type="activity",
+            event_data={"activity": "household errand", "status": "completed"},
+            source="manual",
+            transcript="Rahul completed a household errand for Amma.",
+        ),
+        _event(
+            23,
+            occurred_at=_at(nine_days_ago, 19),
+            reported_by=DEMO_MAYA_ID,
+            event_type="meal",
+            event_data={"meal": "dinner", "appetite": "normal"},
+            source="manual",
+            transcript="Amma's appetite was normal at dinner.",
+        ),
+        _event(
+            24,
+            occurred_at=_at(nine_days_ago, 22, 10),
+            reported_by=DEMO_AMMA_ID,
+            event_type="sleep",
+            event_data={"quality": "good"},
+            source="voice",
+            transcript="I had a quiet night and slept well.",
+            confidence=0.98,
+        ),
     ]
 
     prescription_due = _at(tomorrow, 15)
@@ -362,8 +510,8 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
         {
             "id": "40000000-0000-0000-0000-000000000005",
             "circle_id": DEMO_CIRCLE_ID,
-            "title": "Check pharmacy hours",
-            "description": "Confirm tomorrow's pharmacy opening hours.",
+            "title": "Call pharmacy",
+            "description": "Confirm the pharmacy opening hours.",
             "created_by": DEMO_MAYA_ID,
             "assigned_to": DEMO_RAHUL_ID,
             "status": "completed",
@@ -373,6 +521,66 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
             "source_event_id": None,
             "created_at": _iso(_at(previous_day, 18)),
             "updated_at": _iso(_at(story_day, 10, 15)),
+        },
+        {
+            "id": ANU_VISIT_TASK_ID,
+            "circle_id": DEMO_CIRCLE_ID,
+            "title": "Complete today’s home visit",
+            "description": "Complete the planned home visit and share a routine care note.",
+            "created_by": DEMO_MAYA_ID,
+            "assigned_to": DEMO_ANU_ID,
+            "status": "pending",
+            "priority": "medium",
+            "due_at": _iso(_at(schedule_day, 16)),
+            "completed_at": None,
+            "source_event_id": None,
+            "created_at": _iso(_at(previous_day, 17)),
+            "updated_at": _iso(current),
+        },
+        {
+            "id": "40000000-0000-0000-0000-000000000007",
+            "circle_id": DEMO_CIRCLE_ID,
+            "title": "Bring reading glasses",
+            "description": "Bring Amma's reading glasses from the side table.",
+            "created_by": DEMO_MAYA_ID,
+            "assigned_to": DEMO_MAYA_ID,
+            "status": "completed",
+            "priority": "low",
+            "due_at": _iso(_at(two_days_ago, 16)),
+            "completed_at": _iso(_at(two_days_ago, 15, 40)),
+            "source_event_id": None,
+            "created_at": _iso(_at(three_days_ago, 18)),
+            "updated_at": _iso(_at(two_days_ago, 15, 40)),
+        },
+        {
+            "id": "40000000-0000-0000-0000-000000000008",
+            "circle_id": DEMO_CIRCLE_ID,
+            "title": "Restock household essentials",
+            "description": "Restock the usual kitchen and household essentials.",
+            "created_by": DEMO_MAYA_ID,
+            "assigned_to": DEMO_MAYA_ID,
+            "status": "completed",
+            "priority": "medium",
+            "due_at": _iso(_at(three_days_ago, 18)),
+            "completed_at": _iso(_at(three_days_ago, 17, 20)),
+            "source_event_id": None,
+            "created_at": _iso(_at(four_days_ago, 9)),
+            "updated_at": _iso(_at(three_days_ago, 17, 20)),
+        },
+        {
+            "id": "40000000-0000-0000-0000-000000000009",
+            "circle_id": DEMO_CIRCLE_ID,
+            "title": "Confirm follow-up time",
+            "description": "Confirm the next family follow-up call time.",
+            "created_by": DEMO_MAYA_ID,
+            "assigned_to": DEMO_RAHUL_ID,
+            "status": "pending",
+            "priority": "low",
+            "due_at": _iso(_at(tomorrow, 11)),
+            "completed_at": None,
+            "source_event_id": None,
+            "created_at": _iso(_at(two_days_ago, 14)),
+            "updated_at": _iso(current),
         },
     ]
 
@@ -400,6 +608,14 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
             "starts_at": _iso(_at(today, 14, 30)),
             "ends_at": _iso(_at(today, 16, 30)),
             "note": "Professional home-visit window only",
+        },
+        {
+            "id": "70000000-0000-0000-0000-000000000004",
+            "circle_id": DEMO_CIRCLE_ID,
+            "profile_id": DEMO_MAYA_ID,
+            "starts_at": _iso(_at(tomorrow, 9)),
+            "ends_at": _iso(_at(tomorrow, 11)),
+            "note": "Available for a morning phone check-in",
         },
     ]
 
@@ -443,6 +659,26 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
             "ends_at": _iso(_at(tomorrow, 11, 30)),
             "recurrence_rule": None,
             "created_at": _iso(current - timedelta(days=4)),
+        },
+        {
+            "id": "50000000-0000-0000-0000-000000000005",
+            "circle_id": DEMO_CIRCLE_ID,
+            "created_by": DEMO_MAYA_ID,
+            "title": "Morning phone check-in",
+            "starts_at": _iso(_at(tomorrow, 9, 30)),
+            "ends_at": _iso(_at(tomorrow, 9, 45)),
+            "recurrence_rule": None,
+            "created_at": _iso(current - timedelta(days=3)),
+        },
+        {
+            "id": "50000000-0000-0000-0000-000000000006",
+            "circle_id": DEMO_CIRCLE_ID,
+            "created_by": DEMO_RAHUL_ID,
+            "title": "Rahul family visit",
+            "starts_at": _iso(_at(tomorrow, 18)),
+            "ends_at": _iso(_at(tomorrow, 19)),
+            "recurrence_rule": None,
+            "created_at": _iso(current - timedelta(days=2)),
         },
     ]
 
@@ -491,6 +727,42 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
             "media_path": None,
             "approximate_year": 1992,
             "created_at": _iso(current - timedelta(days=10)),
+        },
+        {
+            "id": "60000000-0000-0000-0000-000000000004",
+            "circle_id": DEMO_CIRCLE_ID,
+            "author_id": DEMO_RAHUL_ID,
+            "subject_id": DEMO_AMMA_ID,
+            "kind": "story",
+            "title": "A family trip to Munnar",
+            "body": "Amma remembers the cool air, shared snacks, and an easy family day in Munnar.",
+            "media_path": None,
+            "approximate_year": None,
+            "created_at": _iso(current - timedelta(days=8)),
+        },
+        {
+            "id": "60000000-0000-0000-0000-000000000005",
+            "circle_id": DEMO_CIRCLE_ID,
+            "author_id": DEMO_MAYA_ID,
+            "subject_id": DEMO_AMMA_ID,
+            "kind": "story",
+            "title": "Rahul's graduation day",
+            "body": "Amma remembers the family gathering together and Rahul's proud smile that day.",
+            "media_path": None,
+            "approximate_year": None,
+            "created_at": _iso(current - timedelta(days=6)),
+        },
+        {
+            "id": "60000000-0000-0000-0000-000000000006",
+            "circle_id": DEMO_CIRCLE_ID,
+            "author_id": DEMO_MAYA_ID,
+            "subject_id": DEMO_AMMA_ID,
+            "kind": "story",
+            "title": "Festival at home",
+            "body": "Amma remembers everyone helping at home, the warm lights, and a lively family meal.",
+            "media_path": None,
+            "approximate_year": None,
+            "created_at": _iso(current - timedelta(days=4)),
         },
     ]
 
@@ -586,7 +858,9 @@ def assert_demo_project(client: Any) -> None:
             )
 
 
-def _upsert(client: Any, table: str, rows: Iterable[dict[str, Any]], conflict: str) -> None:
+def _upsert(
+    client: Any, table: str, rows: Iterable[dict[str, Any]], conflict: str
+) -> None:
     payload = list(rows)
     if not payload:
         return
@@ -629,7 +903,9 @@ def _select_circle(client: Any, table: str, columns: str = "*") -> list[dict[str
     )
 
 
-def verify_demo_state(client: Any, dataset: DemoDataset, *, exact: bool) -> dict[str, Any]:
+def verify_demo_state(
+    client: Any, dataset: DemoDataset, *, exact: bool
+) -> dict[str, Any]:
     members = _select_circle(client, "circle_members", "profile_id")
     events = _select_circle(client, "care_events", "id")
     tasks = _select_circle(
@@ -665,7 +941,9 @@ def verify_demo_state(client: Any, dataset: DemoDataset, *, exact: bool) -> dict
         raise DemoDataError(
             f"Reset verification count mismatch: expected {expected_counts}, got {actual_counts}."
         )
-    if not exact and any(actual_counts[key] < value for key, value in expected_counts.items()):
+    if not exact and any(
+        actual_counts[key] < value for key, value in expected_counts.items()
+    ):
         raise DemoDataError(
             f"Seed verification count mismatch: expected at least {expected_counts}, got {actual_counts}."
         )
@@ -679,27 +957,35 @@ def verify_demo_state(client: Any, dataset: DemoDataset, *, exact: bool) -> dict
         None,
     )
     if not prescription or not rahul_window:
-        raise DemoDataError("Prescription task or Rahul availability is missing after seed.")
+        raise DemoDataError(
+            "Prescription task or Rahul availability is missing after seed."
+        )
     if (
         prescription["status"] != "pending"
         or prescription["assigned_to"] is not None
         or prescription["completed_at"] is not None
     ):
-        raise DemoDataError("Prescription task was not restored to pending and unassigned.")
+        raise DemoDataError(
+            "Prescription task was not restored to pending and unassigned."
+        )
     due = datetime.fromisoformat(prescription["due_at"])
     if not (
         datetime.fromisoformat(rahul_window["starts_at"])
         <= due
         <= datetime.fromisoformat(rahul_window["ends_at"])
     ):
-        raise DemoDataError("Rahul availability does not cover the prescription due time.")
+        raise DemoDataError(
+            "Rahul availability does not cover the prescription due time."
+        )
     now = datetime.now(UTC)
     if any(datetime.fromisoformat(row["starts_at"]) <= now for row in scheduled):
         raise DemoDataError("One or more scheduled items are not in the future.")
 
     return {
         **actual_counts,
-        "pending_tasks": sum(row["status"] not in {"completed", "done", "cancelled"} for row in tasks),
+        "pending_tasks": sum(
+            row["status"] not in {"completed", "done", "cancelled"} for row in tasks
+        ),
         "completed_tasks": sum(row["status"] in {"completed", "done"} for row in tasks),
         "prescription": prescription,
     }

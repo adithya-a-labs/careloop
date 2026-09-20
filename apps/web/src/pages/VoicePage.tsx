@@ -7,6 +7,7 @@ import { canAccessMemoryBox, getVoiceExperienceCopy } from '../features/demo/rol
 import {
   createCareEvent,
   createMemory,
+  DEMO_RAHUL_ID,
   routeVoiceTurn,
   updateTask,
   type VoiceTurnResult,
@@ -31,6 +32,14 @@ function previewMessage(result: VoiceTurnResult | null) {
   return result.preview.message ?? 'CareLoop could not prepare a response for that request.';
 }
 
+function readingProgressMessage(transcript: string) {
+  const normalized = transcript.toLowerCase();
+  if (/who can|who is available|pick up|help tomorrow/.test(normalized)) return 'Finding who’s available…';
+  if (/catch me up|how is|what changed|before my visit/.test(normalized)) return 'Looking at recent updates…';
+  if (/what do i have|when is|visiting|my tasks|done yet|eat lunch/.test(normalized)) return 'Checking today’s care…';
+  return 'Preparing your update…';
+}
+
 export function VoicePage() {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
@@ -41,6 +50,7 @@ export function VoicePage() {
   const [typedTranscript, setTypedTranscript] = useState('');
   const [result, setResult] = useState<VoiceTurnResult | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [processingMessage, setProcessingMessage] = useState('Understanding…');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [referencedTaskId, setReferencedTaskId] = useState<string | null>(null);
   const liveConnection = useRef<LiveVoiceConnection | null>(null);
@@ -54,6 +64,7 @@ export function VoicePage() {
     setTypedTranscript('');
     setResult(null);
     setStatusMessage(null);
+    setProcessingMessage('Understanding…');
     setErrorMessage(null);
     setReferencedTaskId(null);
     return () => liveConnection.current?.close();
@@ -68,6 +79,10 @@ export function VoicePage() {
     setResult(null);
     setTranscript(clean);
     setState('thinking');
+    setProcessingMessage('Understanding…');
+    const progressTimer = window.setTimeout(() => {
+      setProcessingMessage(readingProgressMessage(clean));
+    }, 250);
     try {
       const planned = await routeVoiceTurn(clean, activeProfile, referencedTaskId);
       if (planned.tool === 'save_memory' && !canAccessMemoryBox(activeProfile)) {
@@ -84,6 +99,7 @@ export function VoicePage() {
       setErrorMessage(reason instanceof Error ? reason.message : 'CareLoop could not understand this request.');
       setState('idle');
     } finally {
+      window.clearTimeout(progressTimer);
       setIsProcessing(false);
     }
   };
@@ -92,6 +108,12 @@ export function VoicePage() {
     if (!result?.requires_confirmation) return;
     setIsProcessing(true);
     setErrorMessage(null);
+    const suggestion = result.preview.coordination_suggestion;
+    if (result.tool === 'draft_task' && suggestion?.action === 'assign_task') {
+      setProcessingMessage(suggestion.assignee_id === DEMO_RAHUL_ID ? 'Assigning Rahul…' : 'Assigning task…');
+    } else {
+      setProcessingMessage('Saving your update…');
+    }
     try {
       if (result.tool === 'record_care_event') {
         const events = result.preview.extracted_events ?? [];
@@ -103,7 +125,6 @@ export function VoicePage() {
         await createMemory(result.preview.memory_create, activeProfile.id);
         setStatusMessage('Memory saved to the family MemoryBox.');
       } else if (result.tool === 'draft_task') {
-        const suggestion = result.preview.coordination_suggestion;
         if (!suggestion?.task_id) throw new Error('The task reference is missing.');
         if (suggestion.action === 'assign_task' && suggestion.assignee_id) {
           await updateTask(suggestion.task_id, { assigned_to: suggestion.assignee_id }, activeProfile.id);
@@ -134,6 +155,7 @@ export function VoicePage() {
     setTypedTranscript('');
     setResult(null);
     setStatusMessage(null);
+    setProcessingMessage('Understanding…');
     setErrorMessage(null);
   };
 
@@ -231,8 +253,8 @@ export function VoicePage() {
       <div className="voice-status-label" aria-live="polite">
         {state === 'idle' && (authStatus === 'loading' ? `Signing in as ${activeProfile.displayName}…` : 'Tap to start talking')}
         {state === 'listening' && 'Listening — tap when finished'}
-        {state === 'thinking' && 'Routing your request…'}
-        {state === 'speaking' && 'Review before sharing'}
+        {state === 'thinking' && processingMessage}
+        {state === 'speaking' && (isProcessing ? processingMessage : 'Review before sharing')}
         {state === 'success' && (statusMessage ?? 'Ready')}
       </div>
 
@@ -297,7 +319,15 @@ export function VoicePage() {
 
             {result.requires_confirmation && state === 'speaking' && (
               <button type="button" className="primary-button touch-target" onClick={() => void confirmResult()} disabled={isProcessing}>
-                {isProcessing ? 'Saving…' : result.tool === 'save_memory' ? 'Save memory' : result.tool === 'draft_task' ? 'Confirm assignment' : 'Share update'}
+                {isProcessing
+                  ? 'Saving…'
+                  : result.tool === 'save_memory'
+                    ? 'Save memory'
+                    : suggestion?.action === 'complete_task'
+                      ? 'Confirm completion'
+                      : result.tool === 'draft_task'
+                        ? 'Confirm assignment'
+                        : 'Share update'}
               </button>
             )}
 

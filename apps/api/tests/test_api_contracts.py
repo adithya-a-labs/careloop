@@ -365,9 +365,7 @@ def test_general_meal_statement_remains_a_reviewable_write(
     body = response.json()
     assert body["tool"] == "record_care_event"
     assert body["requires_confirmation"] is True
-    assert body["preview"]["extracted_events"][0]["data"] == {
-        "content": "I ate poorly today."
-    }
+    assert body["preview"]["extracted_events"][0]["data"] == {"content": "I ate poorly today."}
 
 
 @pytest.mark.parametrize(
@@ -384,7 +382,7 @@ def test_general_meal_statement_remains_a_reviewable_write(
         ("Mark that done.", Intent.COORDINATION),
         ("What should I know before my visit?", Intent.CONTEXT_QUERY),
         ("Log today's visit.", Intent.CARE_UPDATE),
-        ("Mark my evening medicine check complete.", Intent.COORDINATION),
+        ("Mark my visit complete.", Intent.COORDINATION),
         ("Amma ate well today.", Intent.CARE_UPDATE),
     ],
 )
@@ -463,7 +461,7 @@ def test_every_visible_voice_prompt_routes_to_a_capability(
             },
         ),
         (
-            "Mark my evening medicine check complete.",
+            "Mark my visit complete.",
             {
                 "user_id": DEMO_ANU_ID,
                 "speaker_id": DEMO_ANU_ID,
@@ -500,6 +498,10 @@ def test_every_visible_voice_prompt_returns_a_working_preview(
     assert body["status"] != "no_action"
     if body["tool"] == "record_care_event":
         assert body["preview"]["extracted_events"]
+    if transcript == "Mark my visit complete.":
+        suggestion = body["preview"]["coordination_suggestion"]
+        assert suggestion["action"] == "complete_task"
+        assert suggestion["task_id"] == "40000000-0000-0000-0000-000000000006"
 
 
 def test_anu_context_query_is_grounded_and_excludes_memorybox(

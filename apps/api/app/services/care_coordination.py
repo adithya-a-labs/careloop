@@ -179,6 +179,21 @@ def _demo_state() -> dict[str, Any]:
             "created_at": _iso(today + timedelta(hours=9, minutes=5)),
             "updated_at": _iso(today + timedelta(hours=9, minutes=5)),
         },
+        "40000000-0000-0000-0000-000000000006": {
+            "id": "40000000-0000-0000-0000-000000000006",
+            "circle_id": DEMO_CIRCLE_ID,
+            "title": "Complete today’s home visit",
+            "description": "Complete the planned home visit and share a routine care note.",
+            "created_by": DEMO_MAYA_ID,
+            "assigned_to": DEMO_ANU_ID,
+            "status": "pending",
+            "priority": "medium",
+            "due_at": _iso(today + timedelta(hours=16)),
+            "completed_at": None,
+            "source_event_id": None,
+            "created_at": _iso(today + timedelta(hours=9, minutes=10)),
+            "updated_at": _iso(today + timedelta(hours=9, minutes=10)),
+        },
     }
     return {
         "profiles": profiles,
