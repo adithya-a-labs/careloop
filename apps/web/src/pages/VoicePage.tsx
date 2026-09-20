@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, Check, Loader2, Mic, ShieldCheck, UserCheck, Volume2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDemoProfile } from '../features/demo/DemoContext';
+import { canAccessMemoryBox, getVoiceExperienceCopy } from '../features/demo/role-experience';
 import {
   createCareEvent,
   createMemory,
@@ -42,6 +43,7 @@ export function VoicePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [referencedTaskId, setReferencedTaskId] = useState<string | null>(null);
   const liveConnection = useRef<LiveVoiceConnection | null>(null);
+  const voiceCopy = getVoiceExperienceCopy(activeProfile);
 
   useEffect(() => {
     liveConnection.current?.close();
@@ -67,6 +69,11 @@ export function VoicePage() {
     setState('thinking');
     try {
       const planned = await routeVoiceTurn(clean, activeProfile, referencedTaskId);
+      if (planned.tool === 'save_memory' && !canAccessMemoryBox(activeProfile)) {
+        setErrorMessage('MemoryBox is private to Amma and her family. You can still share a care update.');
+        setState('idle');
+        return;
+      }
       setResult(planned);
       const taskId = planned.preview.coordination_suggestion?.task_id;
       if (taskId) setReferencedTaskId(taskId);
@@ -195,7 +202,10 @@ export function VoicePage() {
         <button type="button" onClick={() => navigate(-1)} className="voice-header-btn" aria-label="Go back">
           <ArrowLeft size={22} />
         </button>
-        <h1 className="voice-page-title">Talk to CareLoop</h1>
+        <div className="voice-page-heading">
+          <h1 className="voice-page-title">{voiceCopy.heading}</h1>
+          <p>{voiceCopy.helper}</p>
+        </div>
         <button type="button" onClick={resetInteraction} className="voice-header-btn" aria-label="Reset interaction">
           <X size={20} />
         </button>
@@ -226,6 +236,17 @@ export function VoicePage() {
 
       {errorMessage && <p className="form-error" role="alert">{errorMessage}</p>}
 
+      <section className="voice-suggestions" aria-labelledby="voice-suggestions-title">
+        <h2 id="voice-suggestions-title">Try saying</h2>
+        <div className="voice-prompt-list">
+          {voiceCopy.prompts.map((prompt) => (
+            <button type="button" key={prompt} onClick={() => void planTranscript(prompt)} disabled={isProcessing}>
+              “{prompt}”
+            </button>
+          ))}
+        </div>
+      </section>
+
       <form
         className="voice-text-alternative"
         onSubmit={(event) => {
@@ -239,7 +260,7 @@ export function VoicePage() {
             id="voiceTextRequest"
             value={typedTranscript}
             onChange={(event) => setTypedTranscript(event.target.value)}
-            placeholder="Catch me up, ask who can help, or share a memory"
+            placeholder={voiceCopy.prompts[0]}
           />
           <button type="submit" className="primary-button touch-target" disabled={isProcessing || !typedTranscript.trim()}>
             Send

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Calendar, CheckCircle2, ChevronRight, Clock, Sparkles, UserCheck } from 'lucide-react';
+import { BookHeart, Calendar, CheckCircle2, ChevronRight, Clock, Mic, Sparkles, UserCheck, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDemoProfile } from '../features/demo/DemoContext';
 import {
   DEMO_CIRCLE_ID,
   DEMO_RAHUL_ID,
+  PROFILE_UUIDS,
   getHandoffContext,
   listAvailability,
   listTasks,
@@ -120,6 +121,10 @@ export function FamilyHomePage() {
 
   const pendingTasks = useMemo(() => tasks.filter(isOpen), [tasks]);
   const completedTasks = useMemo(() => tasks.filter((task) => !isOpen(task)), [tasks]);
+  const myTasks = useMemo(
+    () => pendingTasks.filter((task) => task.assigned_to === PROFILE_UUIDS[activeProfile.id]),
+    [activeProfile.id, pendingTasks],
+  );
 
   const handleCatchUp = async () => {
     setCatchingUp(true);
@@ -190,6 +195,17 @@ export function FamilyHomePage() {
 
       {error && <p className="form-error" role="alert">{error}</p>}
 
+      <section className="role-voice-hero family-voice-hero">
+        <div>
+          <p className="eyebrow">Voice-first coordination</p>
+          <h2>Ask about Amma or coordinate care</h2>
+          <p>Catch up, find help, or update one of your tasks.</p>
+        </div>
+        <button type="button" className="voice-orb-button voice-orb-button--compact" onClick={() => navigate('/voice')} aria-label="Talk to CareLoop">
+          <Mic size={34} aria-hidden="true" />
+        </button>
+      </section>
+
       <motion.section className="catch-up-hero" initial={{ y: 8 }} animate={{ y: 0 }}>
         <div className="catch-up-content">
           <div className="catch-up-sparkle-row">
@@ -242,6 +258,16 @@ export function FamilyHomePage() {
           )}
         </AnimatePresence>
       </motion.section>
+
+      <section className="role-panel family-changes-panel">
+        <div className="section-header"><h2>Since your last visit</h2><button type="button" className="see-all-btn touch-target" onClick={() => navigate('/timeline')}>Timeline <ChevronRight size={16} aria-hidden="true" /></button></div>
+        {handoff?.events_since_last_seen.slice(0, 3).map((event) => (
+          <article className="work-row" key={event.id}>
+            <div><strong>{event.raw_transcript ?? event.event_type.replaceAll('_', ' ')}</strong><p>{event.reporter.display_name} · {new Date(event.occurred_at).toLocaleString()}</p></div>
+          </article>
+        ))}
+        {!loading && handoff?.events_since_last_seen.length === 0 && <p className="item-subtitle">No new shared changes.</p>}
+      </section>
 
       <section className="attention-section">
         <div className="section-header">
@@ -304,6 +330,16 @@ export function FamilyHomePage() {
         </div>
       </section>
 
+      <section className="role-panel family-my-tasks">
+        <div className="section-header"><h2>My tasks</h2><span className="coral-count-badge">{myTasks.length} open</span></div>
+        {myTasks.slice(0, 3).map((task) => (
+          <article className="work-row" key={task.id}>
+            <div><strong>{task.title}</strong><p>{task.due_at ? new Date(task.due_at).toLocaleString() : 'No due time set'}</p></div>
+          </article>
+        ))}
+        {!loading && myTasks.length === 0 && <p className="item-subtitle">You have no assigned tasks right now.</p>}
+      </section>
+
       <section className="upcoming-section">
         <div className="section-header">
           <h2>Recently completed</h2>
@@ -334,6 +370,19 @@ export function FamilyHomePage() {
           ))}
           {!loading && handoff?.upcoming.length === 0 && <p className="item-subtitle">No upcoming care items.</p>}
         </div>
+      </section>
+
+      <section className="family-shortcuts" aria-label="Family spaces">
+        <button type="button" className="quick-action-card" onClick={() => navigate('/circle')}>
+          <div className="quick-action-icon-wrap"><Users size={22} aria-hidden="true" /></div>
+          <div><div className="quick-action-title">Care Circle</div><div className="quick-action-desc">People helping Amma</div></div>
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
+        <button type="button" className="quick-action-card" onClick={() => navigate('/memories')}>
+          <div className="quick-action-icon-wrap"><BookHeart size={22} aria-hidden="true" /></div>
+          <div><div className="quick-action-title">MemoryBox</div><div className="quick-action-desc">Family stories and moments</div></div>
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
       </section>
     </motion.div>
   );

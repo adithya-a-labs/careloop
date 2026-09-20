@@ -1,8 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { DemoProvider } from '../features/demo/DemoContext';
 import { AppShell } from '../components/layout/AppShell';
-import { PatientHomePage } from '../pages/PatientHome';
-import { FamilyHomePage } from '../pages/FamilyHome';
+import { RoleAwareHomePage } from '../pages/RoleAwareHome';
 import { VoicePage } from '../pages/VoicePage';
 import { TimelinePage } from '../pages/TimelinePage';
 import { TasksPage } from '../pages/TasksPage';
@@ -24,8 +23,8 @@ export function App() {
         <Route path="/profile" element={<ProfileSetupPage />} />
         <Route path="/preferences" element={<AgePreferencesPage />} />
         <Route element={<AppShell />}>
-          <Route path="/home" element={<PatientHomePage />} />
-          <Route path="/family" element={<FamilyHomePage />} />
+          <Route path="/home" element={<RoleAwareHomePage />} />
+          <Route path="/family" element={<RoleAwareHomePage />} />
           <Route path="/voice" element={<VoicePage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/timeline" element={<TimelinePage />} />

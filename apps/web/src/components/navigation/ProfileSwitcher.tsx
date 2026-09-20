@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDemoProfile } from '../../features/demo/DemoContext';
 import { PROFILE_LIST } from '../../lib/mock-data';
+import { getHomeRoute } from '../../features/demo/role-experience';
 
 export function ProfileSwitcher() {
   const { activeProfile, setActiveProfile } = useDemoProfile();
@@ -18,7 +19,7 @@ export function ProfileSwitcher() {
     // Auto-navigate to the correct home page when switching profiles
     const isOnHomePage = location.pathname === '/home' || location.pathname === '/family';
     if (isOnHomePage) {
-      navigate(profile.isPatient ? '/home' : '/family');
+      navigate(getHomeRoute(profile));
     }
   };
 

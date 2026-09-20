@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { CheckSquare, ChevronRight, Mic } from 'lucide-react';
+import { BookHeart, CalendarDays, ChevronRight, Mic } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import StatusCard from '../components/cards/StatusCard';
 import { useDemoProfile } from '../features/demo/DemoContext';
-import { DEMO_CIRCLE_ID, listCareEvents, type CareEvent } from '../lib/api';
+import { DEMO_CIRCLE_ID, getHandoffContext, listCareEvents, type CareEvent, type HandoffContext } from '../lib/api';
 import { removeRealtimeChannel, subscribeToCareEvents } from '../lib/supabase';
 
 export function PatientHomePage() {
@@ -12,6 +12,7 @@ export function PatientHomePage() {
   const reduceMotion = useReducedMotion();
   const { activeProfile, authStatus } = useDemoProfile();
   const [events, setEvents] = useState<CareEvent[]>([]);
+  const [handoff, setHandoff] = useState<HandoffContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,6 +20,7 @@ export function PatientHomePage() {
     let cancelled = false;
     let channel: ReturnType<typeof subscribeToCareEvents> = null;
     setEvents([]);
+    setHandoff(null);
     setLoading(true);
     setError(null);
 
@@ -27,10 +29,11 @@ export function PatientHomePage() {
       return;
     }
 
-    listCareEvents(activeProfile.id)
-      .then((nextEvents) => {
+    Promise.all([listCareEvents(activeProfile.id), getHandoffContext(activeProfile.id)])
+      .then(([nextEvents, nextHandoff]) => {
         if (cancelled) return;
         setEvents(nextEvents);
+        setHandoff(nextHandoff);
         channel = subscribeToCareEvents(DEMO_CIRCLE_ID, (row) => {
           const inserted = row as unknown as CareEvent;
           setEvents((current) => [inserted, ...current.filter((event) => event.id !== inserted.id)]);
@@ -80,6 +83,21 @@ export function PatientHomePage() {
         </motion.button>
       </motion.section>
 
+      <section className="patient-today-section">
+        <div className="section-header"><h2>Today and coming up</h2><CalendarDays size={20} aria-hidden="true" /></div>
+        <div className="cards-list">
+          {handoff?.upcoming.slice(0, 3).map((item) => (
+            <article className="patient-today-card" key={item.id}>
+              <strong>{item.title}</strong>
+              <p>{new Date(item.starts_at).toLocaleString([], { hour: 'numeric', minute: '2-digit', weekday: 'short' })}</p>
+            </article>
+          ))}
+          {!loading && handoff?.upcoming.length === 0 && (
+            <p className="timeline-ghost-hint">Nothing else is scheduled right now.</p>
+          )}
+        </div>
+      </section>
+
       <section className="care-context-section">
         <div className="section-header">
           <h2 className="section-title">Latest shared care</h2>
@@ -111,14 +129,9 @@ export function PatientHomePage() {
 
       <section className="quick-actions-section">
         <div className="quick-actions-grid">
-          <button type="button" className="quick-action-card" onClick={() => navigate('/voice')}>
-            <div className="quick-action-icon-wrap"><Mic size={22} aria-hidden="true" /></div>
-            <div><div className="quick-action-title">Talk to CareLoop</div><div className="quick-action-desc">Voice check-in and updates</div></div>
-            <ChevronRight size={18} aria-hidden="true" />
-          </button>
-          <button type="button" className="quick-action-card" onClick={() => navigate('/tasks')}>
-            <div className="quick-action-icon-wrap"><CheckSquare size={22} aria-hidden="true" /></div>
-            <div><div className="quick-action-title">Today&apos;s tasks</div><div className="quick-action-desc">View shared responsibilities</div></div>
+          <button type="button" className="quick-action-card" onClick={() => navigate('/memories')}>
+            <div className="quick-action-icon-wrap"><BookHeart size={22} aria-hidden="true" /></div>
+            <div><div className="quick-action-title">MemoryBox</div><div className="quick-action-desc">Listen to stories or share a memory</div></div>
             <ChevronRight size={18} aria-hidden="true" />
           </button>
         </div>

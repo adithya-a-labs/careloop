@@ -1,7 +1,8 @@
-import { HeartHandshake, Home, Clock, Mic, Users, ListChecks, BookHeart, MoreHorizontal } from 'lucide-react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { HeartHandshake, Home, Clock, Users, ListChecks, BookHeart } from 'lucide-react';
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ProfileSwitcher } from '../navigation/ProfileSwitcher';
 import { useDemoProfile } from '../../features/demo/DemoContext';
+import { canAccessMemoryBox, getHomeRoute } from '../../features/demo/role-experience';
 
 const navLinks = [
   { to: '/home', label: 'Home', icon: Home },
@@ -12,11 +13,16 @@ const navLinks = [
 ] as const;
 
 export function AppShell() {
-  const { isPatientView, activeProfile } = useDemoProfile();
+  const { activeProfile } = useDemoProfile();
   const location = useLocation();
+  const homeRoute = getHomeRoute(activeProfile);
+  const visibleNavLinks = canAccessMemoryBox(activeProfile)
+    ? navLinks
+    : navLinks.filter((link) => link.to !== '/memories');
 
-  // Decide which "home" route to redirect to based on role
-  const homeRoute = isPatientView ? '/home' : '/family';
+  if (!canAccessMemoryBox(activeProfile) && location.pathname === '/memories') {
+    return <Navigate to={homeRoute} replace />;
+  }
 
   return (
     <div className="app-shell">
@@ -33,14 +39,12 @@ export function AppShell() {
       </main>
 
       <nav className="bottom-nav" aria-label="Primary navigation">
-        {navLinks.map(({ to, label, icon: Icon }) => {
-          // Swap /home for /family when in family view
+        {visibleNavLinks.map(({ to, label, icon: Icon }) => {
           const effectiveTo = to === '/home' ? homeRoute : to;
-          const effectiveLabel = to === '/home' && !isPatientView ? 'Family' : label;
           return (
             <NavLink key={to} to={effectiveTo}>
               <Icon size={20} />
-              <span>{effectiveLabel}</span>
+              <span>{label}</span>
             </NavLink>
           );
         })}

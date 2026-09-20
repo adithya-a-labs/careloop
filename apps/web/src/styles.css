@@ -91,7 +91,7 @@ button { color: var(--care-ink); }
   border: 2px solid transparent; border-radius: 999px; padding: 0.3rem 0.65rem;
   display: flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; font-weight: 700;
   cursor: pointer; background: var(--care-cream); transition: all 0.2s;
-  white-space: nowrap; position: relative;
+  white-space: nowrap; position: relative; min-height: 44px;
 }
 .profile-pill:hover { border-color: var(--care-peach); }
 .profile-pill.active {
@@ -194,6 +194,14 @@ button { color: var(--care-ink); }
   cursor: pointer; border: 0; background: none;
 }
 .cards-list, .care-context-list { display: grid; gap: 0.5rem; }
+.patient-today-section { margin: 0.5rem 0 1rem; }
+.patient-today-section h2 { margin: 0; font-size: 1rem; }
+.patient-today-card {
+  background: var(--care-cream); border: 1px solid var(--care-border);
+  border-radius: var(--care-radius-md); padding: 0.9rem 1rem;
+}
+.patient-today-card strong { display: block; margin-bottom: 0.2rem; }
+.patient-today-card p { margin: 0; color: var(--care-muted); font-size: 0.82rem; }
 
 /* Quick Actions */
 .quick-actions-section { margin-top: 1.2rem; }
@@ -219,10 +227,12 @@ button { color: var(--care-ink); }
 }
 .voice-header-btn {
   background: none; border: 0; cursor: pointer; padding: 0.4rem;
-  border-radius: 12px; display: grid; place-items: center;
+  border-radius: 12px; display: grid; place-items: center; min-width: 44px; min-height: 44px;
 }
 .voice-header-btn:hover { background: var(--care-cream); }
-.voice-page-title { flex: 1; margin: 0; font-size: 1.1rem; }
+.voice-page-heading { flex: 1; min-width: 0; }
+.voice-page-title { margin: 0; font-size: 1.1rem; }
+.voice-page-heading p { margin: 0.15rem 0 0; color: var(--care-muted); font-size: 0.78rem; }
 
 .orb-wrapper {
   display: flex; flex-direction: column; align-items: center;
@@ -301,6 +311,15 @@ button { color: var(--care-ink); }
   border-radius: var(--care-radius-md); font-size: 0.78rem; color: var(--care-muted);
 }
 .voice-safety svg { flex-shrink: 0; color: var(--care-success); }
+.voice-suggestions { width: min(100%, 680px); margin: 0 auto 1rem; text-align: center; }
+.voice-suggestions h2 { margin: 0 0 0.65rem; font-size: 0.85rem; color: var(--care-muted); }
+.voice-prompt-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+.voice-prompt-list button {
+  min-height: 44px; border: 1px solid var(--care-border); border-radius: 999px;
+  background: var(--care-surface); color: var(--care-ink); padding: 0.55rem 0.85rem;
+  font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+}
+.voice-prompt-list button:hover { background: var(--care-cream); border-color: var(--care-peach); }
 
 /* ═══════════════════════════════════════════════════════════
    TIMELINE PAGE
@@ -369,6 +388,37 @@ button { color: var(--care-ink); }
    FAMILY HOME
    ═══════════════════════════════════════════════════════════ */
 .family-home { padding: 1.2rem 1.25rem 2rem; max-width: 920px; margin: auto; }
+.caregiver-home { padding: 1.2rem 1.25rem 2rem; max-width: 920px; margin: auto; }
+.role-home-header { margin-bottom: 1rem; }
+.role-home-header h1 { margin: 0.15rem 0 0.25rem; }
+.role-home-header > p:last-child { margin: 0; color: var(--care-muted); }
+.role-voice-hero {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  background: linear-gradient(135deg, var(--care-cream), var(--care-surface));
+  border: 1px solid var(--care-border); border-radius: var(--care-radius-lg);
+  padding: 1.2rem 1.35rem; margin: 0.8rem 0 1rem;
+}
+.role-voice-hero .eyebrow { margin: 0 0 0.25rem; }
+.role-voice-hero h2 { margin: 0 0 0.25rem; font-size: 1.2rem; }
+.role-voice-hero p:last-child { margin: 0; color: var(--care-muted); font-size: 0.88rem; }
+.voice-orb-button--compact { width: 82px; height: 82px; border-width: 8px; flex: 0 0 82px; }
+.role-home-grid { display: grid; gap: 0.8rem; }
+.role-panel {
+  background: var(--care-surface); border: 1px solid var(--care-border);
+  border-radius: var(--care-radius-lg); padding: 1rem; margin: 0.8rem 0;
+}
+.role-panel h2 { margin: 0; font-size: 1rem; }
+.work-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
+  padding: 0.75rem 0; border-top: 1px solid var(--care-border);
+}
+.work-row:first-of-type { border-top: 0; }
+.work-row > div { min-width: 0; }
+.work-row strong { display: block; overflow-wrap: anywhere; }
+.work-row p { margin: 0.2rem 0 0; color: var(--care-muted); font-size: 0.78rem; }
+.work-row .secondary-button { flex-shrink: 0; }
+.caregiver-report-button { margin: 1rem auto 0; }
+.family-shortcuts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.7rem; margin-top: 1rem; }
 
 .family-greeting { margin-bottom: 0.5rem; }
 .family-greeting .greeting-subtitle, .family-subtitle { color: var(--care-muted); font-size: 0.92rem; }
@@ -709,7 +759,7 @@ button { color: var(--care-ink); }
   .profile-pills { gap: 0.2rem; }
   .profile-pill { min-width: 44px; min-height: 44px; padding: 0.25rem; justify-content: center; }
   .profile-pill-name { display: none; }
-  .quick-grid, .memory-grid-new, .circle-grid, .quick-actions-grid { grid-template-columns: 1fr; }
+  .quick-grid, .memory-grid-new, .circle-grid, .quick-actions-grid, .family-shortcuts { grid-template-columns: 1fr; }
   .stats { gap: 0.4rem; }
   .stats article { padding: 0.7rem; }
   .bottom-nav { width: calc(100% - 20px); justify-content: space-around; bottom: 8px; }
@@ -722,6 +772,10 @@ button { color: var(--care-ink); }
   .voice-text-row { flex-direction: column; }
   .task-item > div:first-child { flex-wrap: wrap; }
   .task-item { overflow-wrap: anywhere; }
+  .role-voice-hero { padding: 1rem; }
+  .voice-orb-button--compact { width: 72px; height: 72px; flex-basis: 72px; }
+  .work-row { align-items: flex-start; flex-direction: column; }
+  .work-row .secondary-button { width: 100%; justify-content: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -731,4 +785,5 @@ button { color: var(--care-ink); }
 @media (min-width: 768px) {
   .cards-list, .care-context-list { grid-template-columns: repeat(2, 1fr); }
   .circle-grid { grid-template-columns: repeat(4, 1fr); }
+  .role-home-grid { grid-template-columns: repeat(2, 1fr); }
 }
