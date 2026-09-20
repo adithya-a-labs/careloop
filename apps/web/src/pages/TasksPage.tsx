@@ -65,10 +65,10 @@ export function TasksPage() {
       ]);
       setTasks(fetchedTasks);
       setAvailability(fetchedAvail);
-    } catch (reason) {
+    } catch {
       setTasks([]);
       setAvailability([]);
-      setError(reason instanceof Error ? reason.message : 'CareLoop could not load tasks.');
+      setError('CareLoop could not load tasks. Check your connection and refresh the page to try again.');
     } finally {
       setLoading(false);
     }
@@ -209,7 +209,7 @@ export function TasksPage() {
         <p className="eyebrow" style={{ margin: 0, marginBottom: '0.4rem' }}>
           Shared care
         </p>
-        <h1 style={{ margin: '0 0 0.5rem 0', fontSize: '2rem', fontWeight: 900 }}>
+        <h1 style={{ margin: '0 0 0.5rem 0', fontSize: 'clamp(1.6rem, 5vw, 2.4rem)', fontWeight: 900 }}>
           Care Tasks
         </h1>
         <p style={{ margin: 0, color: 'var(--care-muted)', fontSize: '1rem' }}>
@@ -217,7 +217,7 @@ export function TasksPage() {
         </p>
       </header>
 
-      {loading && <p className="timeline-ghost-hint">Loading real Care Circle tasks…</p>}
+      {loading && <p className="timeline-ghost-hint" role="status">Loading real Care Circle tasks…</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
 
       {/* Filter tabs */}

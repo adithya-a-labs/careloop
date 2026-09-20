@@ -183,7 +183,6 @@ export function VoiceOrb({ state, onTap, size = 120 }: VoiceOrbProps) {
           placeItems: 'center',
           cursor: onTap ? 'pointer' : 'default',
           padding: 0,
-          outline: 'none',
           zIndex: 2,
         }}
       >

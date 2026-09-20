@@ -67,9 +67,9 @@ export function CareCirclePage() {
           setTasks((current) => [changed, ...current.filter((task) => task.id !== changed.id)]);
         });
       })
-      .catch((reason: unknown) => {
+      .catch(() => {
         if (!cancelled) {
-          setError(reason instanceof Error ? reason.message : 'CareLoop could not load the Care Circle.');
+          setError('CareLoop could not load the Care Circle. Check your connection and refresh the page to try again.');
         }
       })
       .finally(() => {
@@ -85,7 +85,7 @@ export function CareCirclePage() {
   return (
     <div className="circle-page">
       <header style={{ marginBottom: '1.75rem' }}>
-        <h1 style={{ margin: '0 0 0.4rem', fontSize: '2.1rem', fontWeight: 900, color: 'var(--care-ink)' }}>
+        <h1 style={{ margin: '0 0 0.4rem', fontSize: 'clamp(1.6rem, 5vw, 2.4rem)', fontWeight: 900, color: 'var(--care-ink)' }}>
           Our Care Circle
         </h1>
         <p style={{ margin: 0, color: 'var(--care-muted)', fontSize: '1.05rem' }}>
@@ -93,7 +93,7 @@ export function CareCirclePage() {
         </p>
       </header>
 
-      {loading && <p className="timeline-ghost-hint">Loading Care Circle…</p>}
+      {loading && <p className="timeline-ghost-hint" role="status">Loading Care Circle…</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       {!loading && !error && members.length === 0 && (
         <p className="timeline-ghost-hint">No active Care Circle members were returned.</p>

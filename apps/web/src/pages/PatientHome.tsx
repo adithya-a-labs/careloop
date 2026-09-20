@@ -39,8 +39,8 @@ export function PatientHomePage() {
           setEvents((current) => [inserted, ...current.filter((event) => event.id !== inserted.id)]);
         });
       })
-      .catch((reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : 'CareLoop could not load today’s care.');
+      .catch(() => {
+        if (!cancelled) setError('CareLoop could not load today’s care. Check your connection and refresh the page to try again.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -107,7 +107,7 @@ export function PatientHomePage() {
         </div>
 
         <div className="cards-list">
-          {loading && <p className="timeline-ghost-hint">Loading shared updates…</p>}
+          {loading && <p className="timeline-ghost-hint" role="status">Loading shared updates…</p>}
           {error && <p className="form-error" role="alert">{error}</p>}
           {!loading && !error && events.length === 0 && (
             <p className="timeline-ghost-hint">No care updates have been shared yet.</p>

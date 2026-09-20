@@ -40,8 +40,8 @@ export function CaregiverHomePage() {
         setHandoff(nextHandoff);
         setTasks(nextTasks);
       })
-      .catch((reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : 'CareLoop could not load today’s visit.');
+      .catch(() => {
+        if (!cancelled) setError('CareLoop could not load today’s visit. Check your connection and refresh the page to try again.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -91,7 +91,7 @@ export function CaregiverHomePage() {
       <div className="role-home-grid">
         <section className="role-panel">
           <div className="section-header"><h2>Today’s visit</h2><Clock size={20} aria-hidden="true" /></div>
-          {loading && <p className="timeline-ghost-hint">Loading today’s visit…</p>}
+          {loading && <p className="timeline-ghost-hint" role="status">Loading today’s visit…</p>}
           {!loading && handoff?.upcoming.slice(0, 2).map((item) => (
             <article className="work-row" key={item.id}>
               <div><strong>{item.title}</strong><p>{new Date(item.starts_at).toLocaleString()}</p></div>

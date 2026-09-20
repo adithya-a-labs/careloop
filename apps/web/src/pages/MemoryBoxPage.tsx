@@ -66,9 +66,9 @@ export function MemoryBoxPage() {
           setMemories((current) => [newMemory, ...current.filter((memory) => memory.id !== newMemory.id)]);
         });
       })
-      .catch((reason: unknown) => {
+      .catch(() => {
         if (!cancelled) {
-          setError(reason instanceof Error ? reason.message : 'CareLoop could not load MemoryBox.');
+          setError('CareLoop could not load MemoryBox. Check your connection and refresh the page to try again.');
         }
       })
       .finally(() => {
@@ -136,7 +136,7 @@ export function MemoryBoxPage() {
         <h1
           style={{
             margin: '0 0 0.4rem 0',
-            fontSize: '2.1rem',
+            fontSize: 'clamp(1.6rem, 5vw, 2.4rem)',
             fontWeight: 900,
             color: 'var(--care-ink)',
             letterSpacing: '-0.02em',
@@ -186,7 +186,7 @@ export function MemoryBoxPage() {
         })}
       </div>
 
-      {loading && <p className="timeline-ghost-hint">Loading real family memories…</p>}
+      {loading && <p className="timeline-ghost-hint" role="status">Loading real family memories…</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       {!loading && !error && filteredMemories.length === 0 && (
         <p className="timeline-ghost-hint">No memories have been shared yet.</p>

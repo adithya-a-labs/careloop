@@ -105,7 +105,7 @@ export function TimelinePage() {
         });
       })
       .catch(() => {
-        if (!cancelled) setErrorMessage('CareLoop could not load the shared timeline.');
+        if (!cancelled) setErrorMessage('CareLoop could not load the shared timeline. Check your connection and refresh the page to try again.');
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -163,7 +163,7 @@ export function TimelinePage() {
           </div>
         </motion.div>
 
-        {isLoading && <p className="timeline-ghost-hint">Loading shared updates…</p>}
+        {isLoading && <p className="timeline-ghost-hint" role="status">Loading shared updates…</p>}
         {errorMessage && (
           <p className="form-error" role="alert">
             {errorMessage}

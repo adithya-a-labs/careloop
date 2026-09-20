@@ -103,9 +103,9 @@ export function FamilyHomePage() {
             .catch(() => undefined);
         });
       })
-      .catch((reason: unknown) => {
+      .catch(() => {
         if (!cancelled) {
-          setError(reason instanceof Error ? reason.message : 'CareLoop could not load family updates.');
+          setError('CareLoop could not load family updates. Check your connection and refresh the page to try again.');
         }
       })
       .finally(() => {

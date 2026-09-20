@@ -26,6 +26,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <header className="topbar">
         <NavLink to={homeRoute} className="brand">
           <HeartHandshake size={24} />
@@ -34,7 +35,7 @@ export function AppShell() {
         <ProfileSwitcher />
       </header>
 
-      <main className="page-wrap">
+      <main className="page-wrap" id="main-content" tabIndex={-1}>
         <Outlet />
       </main>
 
