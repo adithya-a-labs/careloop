@@ -35,12 +35,24 @@ Configure Supabase with the project URL in both `VITE_SUPABASE_URL` and
 `VITE_SUPABASE_PUBLISHABLE_KEY`, and keep `SUPABASE_SECRET_KEY` and
 `OPENAI_API_KEY` backend-only. Never add a secret key to a `VITE_` variable.
 
-For local data:
+For deterministic demo data, configure the existing demo Supabase project in
+the root `.env` with backend-only `SUPABASE_URL` and `SUPABASE_SECRET_KEY`, then
+run:
 
 ```bash
-supabase start
-pnpm demo:reset
+python scripts/reset_demo.py
+# or: pnpm demo:reset
 ```
+
+The reset command verifies the four fixed synthetic profiles, deletes child
+records only from Amma's fixed demo Care Circle, and restores the exact opening
+state. It intentionally removes live/test records created inside that demo
+circle. It never deletes profiles, auth users, the circle, or data from another
+circle. `python scripts/seed_demo.py` performs deterministic upserts without
+cleanup when existing demo interactions should be preserved.
+
+For a fresh local stack, run `supabase start` and `supabase db reset` first so
+the deterministic demo auth identities exist, then run the reset command above.
 
 Keep `DEMO_MODE=true` and `VITE_DEMO_MODE=true` for the in-memory/fixed-transcript
 fallback. Set both to `false` after adding the Supabase and OpenAI values to use

@@ -34,11 +34,12 @@ function toTimelineEvent(event: CareEvent): TimelineEvent {
   const occurredAt = new Date(event.occurred_at);
   const isRecent = Date.now() - new Date(event.created_at).getTime() < 5 * 60 * 1000;
   const eventLabel = event.event_type.replaceAll('_', ' ');
+  const eventArticle = /^[aeiou]/i.test(eventLabel) ? 'an' : 'a';
 
   return {
     id: event.id,
     emoji: EVENT_EMOJI[event.event_type] ?? '💬',
-    title: `${subject} shared a ${eventLabel} update`,
+    title: `${subject} shared ${eventArticle} ${eventLabel} update`,
     description: event.raw_transcript
       ? `“${event.raw_transcript}”`
       : Object.values(event.event_data).map(String).join(' · '),
@@ -79,6 +80,11 @@ const itemVariants: Variants = {
 
 export function TimelinePage() {
   const { activeProfile, authStatus } = useDemoProfile();
+  const todayLabel = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date());
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -124,7 +130,7 @@ export function TimelinePage() {
         <h1>Care Timeline</h1>
         <p className="timeline-subtitle">
           <Clock size={16} aria-hidden="true" />
-          <span>Today · 19 Sep 2026</span>
+          <span>Today · {todayLabel}</span>
         </p>
       </header>
 

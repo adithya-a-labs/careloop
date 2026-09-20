@@ -11,8 +11,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "format": "prettier --write .",
-    "demo:seed": "python scripts/seed-demo-data.py",
-    "demo:reset": "python scripts/reset-demo.py"
+    "demo:seed": "python scripts/seed_demo.py",
+    "demo:reset": "python scripts/reset_demo.py"
   },
   "devDependencies": {
     "prettier": "^3.4.2",

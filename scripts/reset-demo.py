@@ -1,5 +1,6 @@
-"""Reset local CareLoop state and reapply migrations plus synthetic seed data."""
-import subprocess
+"""Backward-compatible entry point for ``python scripts/reset_demo.py``."""
 
-subprocess.run(["supabase", "db", "reset"], check=True)
-print("CareLoop demo state reset")
+from reset_demo import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())

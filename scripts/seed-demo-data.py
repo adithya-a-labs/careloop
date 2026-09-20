@@ -1,5 +1,6 @@
-"""Seed local Supabase using its CLI. Requires Supabase CLI on PATH."""
-import subprocess
+"""Backward-compatible entry point for ``python scripts/seed_demo.py``."""
 
-subprocess.run(["supabase", "db", "reset"], check=True)
-print("CareLoop demo data seeded from supabase/seed.sql")
+from seed_demo import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())
