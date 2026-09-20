@@ -63,9 +63,12 @@ export function MemoryBoxPage() {
       .then((data) => {
         if (cancelled) return;
         setMemories(data);
-        memSub = subscribeToMemories(DEMO_CIRCLE_ID, (row) => {
+        memSub = subscribeToMemories(DEMO_CIRCLE_ID, (row, deleted) => {
+          if (cancelled) return;
           const newMemory = row as unknown as ApiMemory;
-          setMemories((current) => [newMemory, ...current.filter((memory) => memory.id !== newMemory.id)]);
+          setMemories((current) => deleted
+            ? current.filter((memory) => memory.id !== newMemory.id)
+            : [newMemory, ...current.filter((memory) => memory.id !== newMemory.id)]);
         });
       })
       .catch(() => {

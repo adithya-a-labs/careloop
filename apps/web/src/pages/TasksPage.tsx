@@ -153,7 +153,7 @@ export function TasksPage() {
   const activeProfileName = activeProfile.displayName;
 
   // Load real tasks and availability
-  const loadTasksData = useCallback(async () => {
+  const loadTasksData = useCallback(async (isCancelled: () => boolean = () => false) => {
     const hasCurrentData = Boolean(
       cachedTasks(activeProfile.id) && cachedAvailability(activeProfile.id),
     );
@@ -164,14 +164,16 @@ export function TasksPage() {
         listTasks(activeProfile.id),
         listAvailability(activeProfile.id),
       ]);
+      if (isCancelled()) return;
       setTasks(fetchedTasks);
       setAvailability(fetchedAvail);
     } catch {
+      if (isCancelled()) return;
       setError(
         'CareLoop could not load tasks. Check your connection and refresh the page to try again.',
       );
     } finally {
-      setLoading(false);
+      if (!isCancelled()) setLoading(false);
     }
   }, [activeProfile.id]);
 
@@ -188,9 +190,10 @@ export function TasksPage() {
       setLoading(authStatus === 'loading' && !hasCurrentData);
       return;
     }
-    void loadTasksData().then(() => {
+    void loadTasksData(() => cancelled).then(() => {
       if (cancelled) return;
       taskSub = subscribeToTasks(DEMO_CIRCLE_ID, (payload) => {
+        if (cancelled) return;
         if (payload.eventType === 'DELETE') {
           const deletedTask = payload.old as unknown as ApiTask;
           setTasks((prev) => prev.filter((task) => task.id !== deletedTask.id));

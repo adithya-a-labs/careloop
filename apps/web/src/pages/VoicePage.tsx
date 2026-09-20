@@ -10,6 +10,7 @@ import {
   DEMO_RAHUL_ID,
   routeVoiceTurn,
   updateTask,
+  UUID_TO_NAME,
   type VoiceTurnResult,
 } from '../lib/api';
 import { startLiveVoice, type LiveVoiceConnection } from '../lib/live-voice';
@@ -54,6 +55,7 @@ export function VoicePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [referencedTaskId, setReferencedTaskId] = useState<string | null>(null);
   const liveConnection = useRef<LiveVoiceConnection | null>(null);
+  const interaction = useRef(0);
   const voiceCopy = getVoiceExperienceCopy(activeProfile);
 
   useEffect(() => {
@@ -67,16 +69,18 @@ export function VoicePage() {
     setProcessingMessage('Understanding…');
     setErrorMessage(null);
     setReferencedTaskId(null);
-    return () => liveConnection.current?.close();
+    return () => {
+      interaction.current += 1;
+      liveConnection.current?.close();
+    };
   }, [activeProfile.id]);
 
   const planTranscript = async (value: string) => {
     const clean = value.trim();
-    if (!clean) return;
+    if (!clean || isProcessing || authStatus !== 'authenticated') return;
+    const request = ++interaction.current;
     setIsProcessing(true);
     setErrorMessage(null);
-    setStatusMessage(null);
-    setResult(null);
     setTranscript(clean);
     setState('thinking');
     setProcessingMessage('Understanding…');
@@ -85,27 +89,31 @@ export function VoicePage() {
     }, 250);
     try {
       const planned = await routeVoiceTurn(clean, activeProfile, referencedTaskId);
+      if (request !== interaction.current) return;
       if (planned.tool === 'save_memory' && !canAccessMemoryBox(activeProfile)) {
         setErrorMessage('MemoryBox is private to Amma and her family. You can still share a care update.');
         setState('idle');
         return;
       }
       setResult(planned);
-      const taskId = planned.preview.coordination_suggestion?.task_id;
-      if (taskId) setReferencedTaskId(taskId);
+      const taskSources = planned.preview.context_query?.sources.filter((source) => source.kind === 'task');
+      const taskId = planned.preview.coordination_suggestion?.task_id
+        ?? (planned.preview.context_query?.heading === 'YOUR TASKS' && taskSources?.length === 1 ? taskSources[0].id : null);
+      setReferencedTaskId(taskId ?? null);
       setStatusMessage(previewMessage(planned));
       setState(planned.requires_confirmation ? 'speaking' : 'success');
     } catch (reason) {
+      if (request !== interaction.current) return;
       setErrorMessage(reason instanceof Error ? reason.message : 'CareLoop could not understand this request.');
       setState('idle');
     } finally {
       window.clearTimeout(progressTimer);
-      setIsProcessing(false);
+      if (request === interaction.current) setIsProcessing(false);
     }
   };
 
   const confirmResult = async () => {
-    if (!result?.requires_confirmation) return;
+    if (!result?.requires_confirmation || isProcessing || authStatus !== 'authenticated') return;
     setIsProcessing(true);
     setErrorMessage(null);
     const suggestion = result.preview.coordination_suggestion;
@@ -118,7 +126,13 @@ export function VoicePage() {
       if (result.tool === 'record_care_event') {
         const events = result.preview.extracted_events ?? [];
         if (!events.length) throw new Error('No care updates were available to share.');
-        await Promise.all(events.map((event) => createCareEvent(event, activeProfile.id)));
+        const saved = await Promise.allSettled(events.map((event) => createCareEvent(event, activeProfile.id)));
+        const remaining = events.filter((_, index) => saved[index].status === 'rejected');
+        if (remaining.length) {
+          setResult({ ...result, preview: { ...result.preview, extracted_events: remaining } });
+          setStatusMessage(`${events.length - remaining.length} saved. Review and retry the ${remaining.length} remaining update(s).`);
+          throw new Error('Some updates could not be saved. Please retry the remaining updates.');
+        }
         setStatusMessage(`${events.length} update${events.length === 1 ? '' : 's'} added to the shared timeline.`);
       } else if (result.tool === 'save_memory') {
         if (!result.preview.memory_create) throw new Error('The memory preview is incomplete.');
@@ -128,7 +142,7 @@ export function VoicePage() {
         if (!suggestion?.task_id) throw new Error('The task reference is missing.');
         if (suggestion.action === 'assign_task' && suggestion.assignee_id) {
           await updateTask(suggestion.task_id, { assigned_to: suggestion.assignee_id }, activeProfile.id);
-          setStatusMessage('Rahul’s got it ✨');
+          setStatusMessage(`${UUID_TO_NAME[suggestion.assignee_id] ?? 'Your caregiver'}’s got it ✨`);
         } else if (suggestion.action === 'complete_task') {
           await updateTask(suggestion.task_id, { status: 'completed' }, activeProfile.id);
           setStatusMessage('The task is marked complete.');
@@ -148,6 +162,9 @@ export function VoicePage() {
   };
 
   const resetInteraction = () => {
+    if (isProcessing && state === 'speaking') return;
+    interaction.current += 1;
+    setIsProcessing(false);
     liveConnection.current?.close();
     liveConnection.current = null;
     setState('idle');
@@ -157,6 +174,7 @@ export function VoicePage() {
     setStatusMessage(null);
     setProcessingMessage('Understanding…');
     setErrorMessage(null);
+    setReferencedTaskId(null);
   };
 
   const startHeroFlow = async () => {
@@ -170,18 +188,22 @@ export function VoicePage() {
     setStatusMessage(null);
     setTranscript('');
     setState('listening');
+    const request = ++interaction.current;
     if (!isRealMode) {
       await planTranscript(VOICE_TRANSCRIPT_MOCK);
       return;
     }
     try {
-      liveConnection.current = await startLiveVoice(activeProfile, {
-        onConnected: () => setState('listening'),
-        onInputTranscript: setTranscript,
+      const connection = await startLiveVoice(activeProfile, {
+        onConnected: () => { if (request === interaction.current) setState('listening'); },
+        onInputTranscript: (value) => { if (request === interaction.current) setTranscript(value); },
         onSpeaking: () => undefined,
-        onError: setErrorMessage,
+        onError: (value) => { if (request === interaction.current) setErrorMessage(value); },
       });
+      if (request !== interaction.current) connection.close();
+      else liveConnection.current = connection;
     } catch (reason) {
+      if (request !== interaction.current) return;
       setErrorMessage(
         `${reason instanceof Error ? reason.message : 'Live voice could not start.'} You can type the same request below.`,
       );
@@ -230,7 +252,7 @@ export function VoicePage() {
           <h1 className="voice-page-title">{voiceCopy.heading}</h1>
           <p>{voiceCopy.helper}</p>
         </div>
-        <button type="button" onClick={resetInteraction} className="voice-header-btn" aria-label="Reset interaction">
+        <button type="button" onClick={resetInteraction} disabled={isProcessing && state === 'speaking'} className="voice-header-btn" aria-label="Reset interaction">
           <X size={20} />
         </button>
       </header>
@@ -259,12 +281,13 @@ export function VoicePage() {
       </div>
 
       {errorMessage && <p className="form-error" role="alert">{errorMessage}</p>}
+      {state === 'listening' && transcript && <p aria-live="polite">{transcript}</p>}
 
       <section className="voice-suggestions" aria-labelledby="voice-suggestions-title">
         <h2 id="voice-suggestions-title">Try saying</h2>
         <div className="voice-prompt-list">
           {voiceCopy.prompts.map((prompt) => (
-            <button type="button" key={prompt} onClick={() => void planTranscript(prompt)} disabled={isProcessing}>
+            <button type="button" key={prompt} onClick={() => void planTranscript(prompt)} disabled={isProcessing || authStatus !== 'authenticated' || state === 'listening'}>
               “{prompt}”
             </button>
           ))}
@@ -286,14 +309,14 @@ export function VoicePage() {
             onChange={(event) => setTypedTranscript(event.target.value)}
             placeholder={voiceCopy.prompts[0]}
           />
-          <button type="submit" className="primary-button touch-target" disabled={isProcessing || !typedTranscript.trim()}>
+          <button type="submit" className="primary-button touch-target" disabled={isProcessing || authStatus !== 'authenticated' || state === 'listening' || !typedTranscript.trim()}>
             Send
           </button>
         </div>
       </form>
 
       <AnimatePresence>
-        {(state === 'speaking' || state === 'success') && result && (
+        {result && (
           <motion.section
             className="voice-transcript"
             initial={{ opacity: 0, y: 12 }}
@@ -301,10 +324,20 @@ export function VoicePage() {
             exit={{ opacity: 0 }}
           >
             <div className="voice-transcript-tag">
-              {contextAnswer?.heading ?? result.preview.intent.replaceAll('_', ' ')}
+              {contextAnswer?.heading ?? (result.preview.intent === 'catch_up' ? 'CATCH ME UP' : result.preview.intent.replaceAll('_', ' '))}
             </div>
-            <blockquote className="voice-transcript-quote">“{transcript}”</blockquote>
+            <blockquote className="voice-transcript-quote">“{result.preview.text}”</blockquote>
             <p className="voice-preview-message">{statusMessage}</p>
+
+            {result.preview.extracted_events?.length ? (
+              <ul aria-label="Care updates to share">
+                {result.preview.extracted_events.map((event, index) => (
+                  <li key={`${event.type}:${index}`}>
+                    <strong>{event.type.replaceAll('_', ' ')}</strong>: {Object.entries(event.data).map(([key, value]) => `${key.replaceAll('_', ' ')}: ${String(value).replaceAll('_', ' ')}`).join(', ')}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
 
             {contextAnswer?.sources.length ? (
               <ul className="voice-context-sources" aria-label="CareLoop sources">
@@ -335,10 +368,10 @@ export function VoicePage() {
               <button
                 type="button"
                 className="primary-button touch-target"
-                onClick={() => void planTranscript('Ask Rahul.')}
+                onClick={() => void planTranscript(`Ask ${UUID_TO_NAME[suggestion.assignee_id!]}.`)}
                 disabled={isProcessing}
               >
-                <UserCheck size={18} aria-hidden="true" /> Ask Rahul
+                <UserCheck size={18} aria-hidden="true" /> Ask {UUID_TO_NAME[suggestion.assignee_id]}
               </button>
             )}
           </motion.section>

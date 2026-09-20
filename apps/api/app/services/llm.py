@@ -16,7 +16,7 @@ class LLMService:
     def _get_client(self) -> Any:
         from openai import OpenAI
 
-        return OpenAI(api_key=settings.openai_api_key)
+        return OpenAI(api_key=settings.openai_api_key, timeout=20.0, max_retries=1)
 
     def _extract_demo_care_events(
         self,

@@ -253,7 +253,7 @@ erDiagram
 | Interaction and visuals | Framer Motion 13, Lucide React, repository-owned CSS design tokens                    |
 | API                     | Python 3.11+, FastAPI, Pydantic Settings, Uvicorn, HTTPX                              |
 | AI — live voice         | OpenAI `gpt-live-1` over WebRTC for speech input, speech output, and live transcripts |
-| AI — structured flows   | OpenAI Responses API with `gpt-5.6-luna` for care-event extraction, handoffs, coordination, and memory extraction |
+| AI — structured flows   | OpenAI Responses API with `gpt-5.6-luna` for care-event extraction, handoffs, grounded context synthesis, coordination, and memory extraction |
 | Data                    | Supabase Postgres, Auth, Row Level Security, Realtime                                 |
 | Tooling                 | pnpm 9 workspace, TypeScript, Vitest, Pytest, Ruff, Supabase CLI                      |
 | Packaging               | Dockerfiles for web/API and a local Docker Compose definition                         |
@@ -271,9 +271,10 @@ OpenAI is behind the FastAPI boundary. The model identifiers are literal values 
 | Handoff summary | OpenAI | `gpt-5.6-luna` |
 | Coordination suggestions | OpenAI | `gpt-5.6-luna` |
 | Memory extraction | OpenAI | `gpt-5.6-luna` |
-| Grounded context queries and intent routing | CareLoop deterministic services | No model configured |
+| Multi-source context synthesis | OpenAI | `gpt-5.6-luna` |
+| Task, schedule, and meal reads; intent routing | CareLoop deterministic services | No model required |
 
-`gpt-live-1` handles the live audio session and transcripts; CareLoop does not configure separate STT or TTS model IDs. `gpt-5.6-luna` serves all four Responses API structured-output flows listed above. The deterministic intent router and named specialists constrain what a model can request, and models receive no arbitrary SQL or code-execution capability.
+`gpt-live-1` handles the live audio session and transcripts; CareLoop does not configure separate STT or TTS model IDs. `gpt-5.6-luna` serves the five Responses API structured-output flows listed above. Context synthesis receives only authorized care records and returns source attribution; ordinary task, schedule, and meal reads remain deterministic. The deterministic intent router and named specialists constrain what a model can request, and models receive no arbitrary SQL or code-execution capability.
 
 CareLoop also remains demonstrable without provider credentials: deterministic fallbacks cover the fixed voice update, grounded handoff, prescription coordination, and memory flow.
 

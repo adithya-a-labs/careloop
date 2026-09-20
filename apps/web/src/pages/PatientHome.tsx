@@ -36,9 +36,12 @@ export function PatientHomePage() {
         if (cancelled) return;
         setEvents(nextEvents);
         setHandoff(nextHandoff);
-        channel = subscribeToCareEvents(DEMO_CIRCLE_ID, (row) => {
+        channel = subscribeToCareEvents(DEMO_CIRCLE_ID, (row, deleted) => {
+          if (cancelled) return;
           const inserted = row as unknown as CareEvent;
-          setEvents((current) => [inserted, ...current.filter((event) => event.id !== inserted.id)]);
+          setEvents((current) => deleted
+            ? current.filter((event) => event.id !== inserted.id)
+            : [inserted, ...current.filter((event) => event.id !== inserted.id)]);
         });
       })
       .catch(() => {

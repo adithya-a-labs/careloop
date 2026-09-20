@@ -1,7 +1,7 @@
 import { HeartHandshake } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { PROFILES, type DemoProfile, type DemoProfileId } from '../../lib/mock-data';
-import { bootstrapDemoSession, ensureDemoSession, isRealMode } from '../../lib/supabase';
+import { activateDemoSession, bootstrapDemoSession, isRealMode } from '../../lib/supabase';
 
 type AuthStatus = 'loading' | 'authenticated' | 'failed';
 
@@ -60,7 +60,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     setAuthStatus(isRealMode ? 'loading' : 'authenticated');
     setAuthError(null);
     try {
-      await ensureDemoSession(id);
+      await activateDemoSession(id);
       if (requestId !== switchRequest.current) return false;
       setProfileId(id);
       setAuthStatus('authenticated');

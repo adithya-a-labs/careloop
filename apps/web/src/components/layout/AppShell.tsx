@@ -13,7 +13,7 @@ const navLinks = [
 ] as const;
 
 export function AppShell() {
-  const { activeProfile } = useDemoProfile();
+  const { activeProfile, authStatus, authError } = useDemoProfile();
   const location = useLocation();
   const homeRoute = getHomeRoute(activeProfile);
   const visibleNavLinks = canAccessMemoryBox(activeProfile)
@@ -35,7 +35,9 @@ export function AppShell() {
         <ProfileSwitcher />
       </header>
 
-      <main className="page-wrap" id="main-content" tabIndex={-1}>
+      {authError && <p className="form-error" role="alert">{authError}</p>}
+      <main key={activeProfile.id} className="page-wrap" id="main-content" tabIndex={-1}
+        aria-busy={authStatus === 'loading'} {...(authStatus !== 'authenticated' ? { inert: '' } : {})}>
         <Outlet />
       </main>
 

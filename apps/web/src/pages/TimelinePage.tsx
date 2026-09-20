@@ -104,11 +104,12 @@ export function TimelinePage() {
       .then((careEvents) => {
         if (cancelled) return;
         setEvents(careEvents.map(toTimelineEvent));
-        channel = subscribeToCareEvents(DEMO_CIRCLE_ID, (row) => {
+        channel = subscribeToCareEvents(DEMO_CIRCLE_ID, (row, deleted) => {
+          if (cancelled) return;
           const inserted = row as unknown as CareEvent;
           setEvents((current) => {
-            if (current.some((event) => event.id === inserted.id)) return current;
-            return [toTimelineEvent(inserted), ...current];
+            const remaining = current.filter((event) => event.id !== inserted.id);
+            return deleted ? remaining : [toTimelineEvent(inserted), ...remaining];
           });
         });
       })

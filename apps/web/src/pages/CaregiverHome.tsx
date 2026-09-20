@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDemoProfile } from '../features/demo/DemoContext';
 import {
   DEMO_ANU_ID,
+  DEMO_CIRCLE_ID,
   cachedHandoffContext,
   cachedTasks,
   getHandoffContext,
@@ -12,6 +13,7 @@ import {
   type ApiTask,
   type HandoffContext,
 } from '../lib/api';
+import { subscribeToCareEvents, subscribeToTasks, removeRealtimeChannel } from '../lib/supabase';
 
 function isOpen(task: ApiTask) {
   return !['completed', 'done', 'cancelled'].includes(task.status);
@@ -39,7 +41,7 @@ export function CaregiverHomePage() {
       setLoading(authStatus === 'loading' && !hasCurrentData);
       return;
     }
-    Promise.all([getHandoffContext(activeProfile.id), listTasks(activeProfile.id)])
+    const refresh = () => Promise.all([getHandoffContext(activeProfile.id), listTasks(activeProfile.id)])
       .then(([nextHandoff, nextTasks]) => {
         if (cancelled) return;
         setHandoff(nextHandoff);
@@ -51,7 +53,14 @@ export function CaregiverHomePage() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    void refresh();
+    const eventChannel = subscribeToCareEvents(DEMO_CIRCLE_ID, () => { void refresh(); });
+    const taskChannel = subscribeToTasks(DEMO_CIRCLE_ID, () => { void refresh(); });
+    return () => {
+      cancelled = true;
+      void removeRealtimeChannel(eventChannel);
+      void removeRealtimeChannel(taskChannel);
+    };
   }, [activeProfile.id, authStatus]);
 
   const myTasks = useMemo(

@@ -52,12 +52,13 @@ export function FamilyHomePage() {
   const [confirmedTaskId, setConfirmedTaskId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isCancelled: () => boolean = () => false) => {
     const [nextHandoff, nextAvailability, nextTasks] = await Promise.all([
       getHandoffContext(activeProfile.id),
       listAvailability(activeProfile.id),
       listTasks(activeProfile.id),
     ]);
+    if (isCancelled()) return;
     setHandoff(nextHandoff);
     setAvailability(nextAvailability);
     setTasks(nextTasks);
@@ -86,10 +87,15 @@ export function FamilyHomePage() {
       return;
     }
 
-    loadData()
+    loadData(() => cancelled)
       .then(() => {
         if (cancelled) return;
         taskChannel = subscribeToTasks(DEMO_CIRCLE_ID, (payload) => {
+          if (cancelled) return;
+          setHandoffSummary(null);
+          void getHandoffContext(activeProfile.id).then((context) => {
+            if (!cancelled) setHandoff(context);
+          }).catch(() => undefined);
           const changed = (payload.eventType === 'DELETE' ? payload.old : payload.new) as unknown as ApiTask;
           if (!changed.id) return;
           setTasks((current) => {

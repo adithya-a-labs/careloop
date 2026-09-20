@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from openai import APIError
 
 from app.agents.care_event import extract_events
 from app.api.dependencies import as_http_exception, get_actor_id
@@ -39,7 +40,17 @@ def voice_turn(
         service.assert_voice_context(payload.circle_id, context_actor_id, payload.patient_id)
     except ServiceError as exc:
         raise as_http_exception(exc) from exc
-    return plan_voice_turn(payload)
+    try:
+        return plan_voice_turn(payload)
+    except ServiceError as exc:
+        raise as_http_exception(exc) from exc
+    except APIError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "voice_provider_unavailable", "message": (
+                "CareLoop could not prepare that response. Please try again."
+            )},
+        ) from exc
 
 @router.post("/extract", response_model=CareEventExtractionResult)
 def extract_care_events(

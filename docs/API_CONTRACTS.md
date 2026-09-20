@@ -36,6 +36,8 @@ This document defines stable rules for communication between CareLoop clients, F
 - Voice turns preserve `circle_id`, `patient_id`, `patient_name`, `speaker_id`, `role`, `relationship`, and `preferred_language` throughout routing.
 - Mutating results return a reviewed draft and `requires_confirmation: true`. Clients submit the confirmed draft through the canonical FastAPI care-event, task, or memory endpoint.
 - A coordination follow-up may include `referenced_task_id` so a phrase such as “Ask Rahul” can update the task that was just discussed without guessing identity or task scope.
+- Task references must identify one pending task. Ambiguous titles, missing conversational references, and multiple named assignees return clarification rather than selecting the first record. Explicit task titles take precedence over an earlier reference.
+- Context synthesis uses the existing structured-output model only after authorized retrieval; task, schedule, and meal questions retain deterministic reads. Source records remain application-owned, never model-generated. Provider failures return a retryable `503` response without claiming success.
 - Handoff results are read-only, use the authorized handoff-context service, and return a short narrative plus source records with attribution and timestamps.
 - Context-query results are read-only and return a grounded answer, presentation heading, and source timestamps from allow-listed care-event, task, member, schedule, availability, and handoff services. Caregiver context queries never receive a MemoryBox retrieval tool.
 - MemoryBox create and list operations require a care-recipient or family membership. Professional caregivers are denied at both the service boundary and database RLS boundary.

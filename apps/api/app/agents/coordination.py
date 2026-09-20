@@ -1,6 +1,7 @@
 """Coordination Agent - helps coordinate care tasks using structured tool proposals."""
 
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -46,41 +47,45 @@ def _resolve_task_reference(
     """Resolve task reference from transcript or conversation history."""
     lowered = transcript.lower()
 
-    if referenced_task_id and any(
-        str(task.get("id")) == referenced_task_id
-        and task.get("status") in ("pending", "open", "in_progress")
-        for task in tasks
-    ):
-        return referenced_task_id
-
     pending_tasks = [
         task for task in tasks if task.get("status") in ("pending", "open", "in_progress")
     ]
     candidates = pending_tasks
-    if "my" in lowered and actor_id:
-        actor_tasks = [task for task in pending_tasks if task.get("assigned_to") == actor_id]
-        if actor_tasks:
-            candidates = actor_tasks
+    if "my" in lowered.split() and actor_id:
+        candidates = [task for task in pending_tasks if task.get("assigned_to") == actor_id]
 
     # Explicit task title mention. Never resolve an already-completed task.
-    for task in candidates:
-        title = task.get("title", "").lower()
-        if title and any(word in lowered for word in title.split() if len(word) > 3):
-            return task["id"]
+    ignored = {"complete", "completed", "today", "tomorrow", "task", "mark", "done"}
+
+    def matching(content: str) -> list[dict[str, Any]]:
+        words = set(re.findall(r"\w+", content)) - ignored
+        return [
+            task for task in candidates
+            if words & (set(re.findall(r"\w+", task.get("title", "").lower())) - ignored)
+            - {"the", "a", "to", "up", "my", "with", "for", "and"}
+        ]
+
+    matches = matching(lowered)
+    if matches:
+        return matches[0]["id"] if len(matches) == 1 else None
+
+    is_followup = bool(re.search(r"\b(that|it)\b", lowered)) or lowered.startswith(
+        ("ask ", "assign to ", "tell ", "ചോദിക്കൂ")
+    )
+    if is_followup and referenced_task_id and any(
+        str(task.get("id")) == referenced_task_id for task in candidates
+    ):
+        return referenced_task_id
 
     # Check history for recent task mentions
-    if history:
+    if is_followup and history:
         for msg in reversed(history):
             content = msg.get("content", "").lower()
-            for task in pending_tasks:
-                title = task.get("title", "").lower()
-                if title and any(word in content for word in title.split() if len(word) > 3):
-                    return task["id"]
+            matches = matching(content)
+            if matches:
+                return matches[0]["id"] if len(matches) == 1 else None
 
-    # Default to first pending task if "that"/"it" used
-    if pending_tasks and any(word in lowered for word in ("that", "it", "the task")):
-        return pending_tasks[0]["id"]
-
+    # A pronoun without conversational evidence is not a task reference.
     return None
 
 
@@ -170,6 +175,10 @@ def coordinate(
             "ask ",
             "assign",
             "tell ",
+            "mark",
+            "done",
+            "complete",
+            "finish",
             "ആർക്കു കഴിയും",
             "ആർ ലഭ്യമാണ്",
             "ചോദിക്കൂ",
@@ -235,12 +244,24 @@ def _coordinate_demo(
             "ആർ ലഭ്യമാണ്",
         )
     ):
-        # Find prescription task
-        prescription_task = None
-        for task in tasks:
-            if "prescription" in task["title"].lower() and task["status"] in ("pending", "open"):
-                prescription_task = task
-                break
+        pending = [task for task in tasks if task["status"] in ("pending", "open")]
+        if task_id:
+            matches = [task for task in pending if task["id"] == task_id]
+        elif "prescription" in lowered or "പ്രിസ്ക്രിപ്ഷൻ" in lowered:
+            matches = [task for task in pending if "prescription" in task["title"].lower()]
+        else:
+            tomorrow = (datetime.now().astimezone() + timedelta(days=1)).date()
+            matches = [
+                task for task in pending if not task.get("assigned_to") and task.get("due_at")
+                and datetime.fromisoformat(task["due_at"]).astimezone().date() == tomorrow
+            ]
+        if len(matches) != 1 or not matches[0].get("due_at"):
+            return CoordinationSuggestion(
+                action="list_availability", task_id=None, assignee_id=None,
+                message="Which task and due time should I check availability for?",
+                requires_confirmation=False,
+            )
+        prescription_task = matches[0]
 
         if prescription_task:
             due_at = prescription_task.get("due_at")
@@ -255,7 +276,7 @@ def _coordinate_demo(
                     member = next(
                         (m for m in members if m["profile_id"] == avail["profile_id"]), None
                     )
-                    if member:
+                    if member and member not in available_members:
                         available_members.append(member)
 
             if available_members:
@@ -267,7 +288,7 @@ def _coordinate_demo(
                     action="suggest_assignee",
                     task_id=prescription_task["id"],
                     assignee_id=only_assignee,
-                    message=f"{names} is available when the prescription pickup is due tomorrow.",
+                    message=f"{names}: available when {prescription_task['title']} is due.",
                     requires_confirmation=False,
                 )
             else:
@@ -275,18 +296,24 @@ def _coordinate_demo(
                     action="list_availability",
                     task_id=prescription_task["id"],
                     assignee_id=None,
-                    message="Prescription pickup needed but no one shows availability for tomorrow.",
+                    message="No one has recorded availability covering this task's due time.",
                     requires_confirmation=False,
                 )
 
     # "Ask Rahul" / "Assign to Rahul"
     if any(phrase in lowered for phrase in ("ask ", "assign", "tell ", "ചോദിക്കൂ")):
         # Extract name after "ask"/"assign to"/"tell"
-        assignee_id = None
-        for name, pid in name_to_id.items():
-            if name in lowered:
-                assignee_id = pid
-                break
+        assignees = {
+            pid for name, pid in name_to_id.items()
+            if re.search(r"\b" + re.escape(name) + r"\b", lowered)
+        }
+        if len(assignees) > 1:
+            return CoordinationSuggestion(
+                action="suggest_assignee", task_id=task_id, assignee_id=None,
+                message="Who should I assign this to? Please choose one person.",
+                requires_confirmation=False,
+            )
+        assignee_id = next(iter(assignees), None)
 
         if assignee_id and task_id:
             return CoordinationSuggestion(

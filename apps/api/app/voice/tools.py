@@ -86,6 +86,12 @@ def suggest_tool(
     elif intent == Intent.MEMORY:
         tool = "save_memory"
         assert tool in ALLOWED_TOOLS
+        if transcript.lower().strip().rstrip('.!?') in {
+            "i want to tell you a memory", "i want to share a memory",
+            "i want to tell you about my first job",
+        }:
+            base["message"] = "I'd love to hear it. Tell me what happened, then we'll review the memory together."
+            return tool, base, False
         memory_result: MemoryExtractionResult = extract_memory(
             transcript=transcript,
             speaker_name=context.get("speaker_name") or "Family",

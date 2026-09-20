@@ -677,3 +677,55 @@ def test_supported_read_questions_never_fall_through(
 )
 def test_native_malayalam_intent_fallback(transcript: str, expected: Intent) -> None:
     assert route_intent(transcript).intent == expected
+
+
+def test_context_synthesis_keeps_sources_application_owned(demo_client, monkeypatch):
+    import json
+    from types import SimpleNamespace
+
+    from app.schemas.common import HandoffNarrative
+
+    calls = {}
+
+    def parse(**kwargs):
+        calls.update(kwargs)
+        return SimpleNamespace(output_parsed=HandoffNarrative(summary="Recent care notes are available."))
+
+    monkeypatch.setattr(settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(
+        "app.agents.context._llm._get_client",
+        lambda: SimpleNamespace(responses=SimpleNamespace(parse=parse)),
+    )
+    response = demo_client.post("/api/v1/voice/turn", json=_voice_turn_payload("How is Amma?"))
+    assert response.status_code == 200
+    answer = response.json()["preview"]["context_query"]
+    assert calls["model"] == "gpt-5.6-luna"
+    assert calls["text_format"] is HandoffNarrative
+    assert answer["sources"] == json.loads(calls["input"][1]["content"])["sources"]
+    assert all(source["kind"] != "memory" for source in answer["sources"])
+    assert response.json()["requires_confirmation"] is False
+
+
+def test_voice_provider_timeout_is_retryable_without_success(demo_client, monkeypatch):
+    import httpx
+    from openai import APITimeoutError
+
+    def fail(_payload):
+        raise APITimeoutError(request=httpx.Request("POST", "https://api.openai.com/v1/responses"))
+
+    monkeypatch.setattr("app.api.routes.voice.plan_voice_turn", fail)
+    response = demo_client.post("/api/v1/voice/turn", json=_voice_turn_payload("How is Amma?"))
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "voice_provider_unavailable"
+    assert "preview" not in response.json()
+
+
+def test_memory_opener_invites_story_without_saving_placeholder(demo_client):
+    response = demo_client.post(
+        "/api/v1/voice/turn", json=_voice_turn_payload("I want to tell you a memory.")
+    )
+    body = response.json()
+    assert body["tool"] == "save_memory"
+    assert body["requires_confirmation"] is False
+    assert "memory_create" not in body["preview"]
+    assert body["preview"]["message"]

@@ -1,15 +1,10 @@
 import type { DemoProfile, DemoProfileId } from './mock-data';
 import { ensureDemoSession, isRealMode } from './supabase';
+import { cacheRevision, invalidateReads, readCache } from './read-cache';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 const READ_CACHE_TTL_MS = 60_000;
 
-interface ReadCacheEntry {
-  value: unknown;
-  storedAt: number;
-}
-
-const readCache = new Map<string, ReadCacheEntry>();
 const readRequests = new Map<string, Promise<unknown>>();
 
 function readCacheKey(path: string, profileId: DemoProfileId) {
@@ -87,7 +82,7 @@ export async function api<T>(
   const method = (init?.method ?? 'GET').toUpperCase();
   if (method !== 'GET') {
     const result = await requestApi<T>(path, init, profileId);
-    readCache.clear();
+    if (!path.startsWith('/api/v1/voice/')) invalidateReads();
     return result;
   }
 
@@ -99,12 +94,17 @@ export async function api<T>(
   const pending = readRequests.get(key);
   if (pending) return pending as Promise<T>;
 
+  const revision = cacheRevision;
   const request = requestApi<T>(path, init, profileId)
     .then((value) => {
+      if (revision !== cacheRevision) {
+        readRequests.delete(key);
+        return api<T>(path, init, profileId);
+      }
       readCache.set(key, { value, storedAt: Date.now() });
       return value;
     })
-    .finally(() => readRequests.delete(key));
+    .finally(() => { if (readRequests.get(key) === request) readRequests.delete(key); });
   readRequests.set(key, request);
   return request;
 }
