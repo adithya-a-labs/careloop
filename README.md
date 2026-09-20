@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <code>[Add Live Demo URL]</code> · <code>[Add Demo Video URL]</code>
+  <code>[Add Live Demo URL]</code> · <a href="https://drive.google.com/file/d/1oj9YIp_1nmelZRLYtAxHtW86W8iE4LFV/view?usp=sharing"><strong>▶ Watch the demo video</strong></a>
 </p>
 
 > [!IMPORTANT]
@@ -346,7 +346,7 @@ Follow the CareLoop story from Amma's voice-first check-in to shared context, co
 ## Demo
 
 - **Live demo:** `[Add Live Demo URL]`
-- **Demo / pitch video:** `[Add Demo Video URL]`
+- **Demo / pitch video:** [Watch CareLoop in action](https://drive.google.com/file/d/1oj9YIp_1nmelZRLYtAxHtW86W8iE4LFV/view?usp=sharing)
 
 For the judging flow, watch for:
 
