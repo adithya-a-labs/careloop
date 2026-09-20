@@ -189,6 +189,28 @@ def test_memory_and_handoff_use_current_contract(demo_client: TestClient) -> Non
     )
 
 
+def test_caregiver_cannot_read_or_create_private_memories(
+    demo_client: TestClient,
+) -> None:
+    service = get_care_coordination_service()
+
+    with pytest.raises(ForbiddenError) as read_error:
+        service.list_memories(UUID(DEMO_CIRCLE_ID), DEMO_ANU_ID, 50, 0)
+    assert read_error.value.code == "memory_access_denied"
+
+    with pytest.raises(ForbiddenError) as create_error:
+        service.create_memory(
+            UUID(DEMO_CIRCLE_ID),
+            DEMO_ANU_ID,
+            {
+                "subject_id": DEMO_AMMA_ID,
+                "kind": "story",
+                "title": "Private family memory",
+            },
+        )
+    assert create_error.value.code == "memory_access_denied"
+
+
 def test_handoff_window_and_timezone_semantics(demo_client: TestClient) -> None:
     future = (datetime.now(UTC) + timedelta(days=2)).isoformat()
     response = demo_client.get(

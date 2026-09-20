@@ -30,6 +30,22 @@ pnpm dev
 
 Web: `http://localhost:5174` · API docs: `http://localhost:8000/docs`
 
+## Bring Your Own Supabase
+
+The hosted demo may use a maintained Supabase instance, but this repository is
+fully portable. Evaluators and contributors can provision their own backend from
+the committed migrations, RLS policies, Realtime configuration and synthetic
+seed data.
+
+```bash
+pnpm setup:supabase
+pnpm verify:supabase
+pnpm dev
+```
+
+See [CareLoop — Bring Your Own Supabase](docs/SUPABASE_SETUP.md) for required
+credentials, local and hosted setup paths, security notes and troubleshooting.
+
 Configure Supabase with the project URL in both `VITE_SUPABASE_URL` and
 `SUPABASE_URL`. Use the browser-safe publishable key in
 `VITE_SUPABASE_PUBLISHABLE_KEY`, and keep `SUPABASE_SECRET_KEY` and

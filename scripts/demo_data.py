@@ -725,7 +725,7 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
                 "checking everything twice and walking out together with a smile."
             ),
             "media_path": None,
-            "approximate_year": 1992,
+            "approximate_year": 1994,
             "created_at": _iso(current - timedelta(days=10)),
         },
         {
@@ -737,7 +737,7 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
             "title": "A family trip to Munnar",
             "body": "Amma remembers the cool air, shared snacks, and an easy family day in Munnar.",
             "media_path": None,
-            "approximate_year": None,
+            "approximate_year": 2001,
             "created_at": _iso(current - timedelta(days=8)),
         },
         {
@@ -749,7 +749,7 @@ def build_demo_dataset(now: datetime | None = None) -> DemoDataset:
             "title": "Rahul's graduation day",
             "body": "Amma remembers the family gathering together and Rahul's proud smile that day.",
             "media_path": None,
-            "approximate_year": None,
+            "approximate_year": 2008,
             "created_at": _iso(current - timedelta(days=6)),
         },
         {

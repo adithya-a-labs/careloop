@@ -117,8 +117,8 @@ values
     'manual',
     'Amma didn''t eat much at lunch.',
     0.98,
-    date_trunc('day', now()) + interval '13 hours',
-    date_trunc('day', now()) + interval '13 hours 5 minutes'
+    now() - interval '1 day 5 hours',
+    now() - interval '1 day 4 hours 55 minutes'
   ),
   (
     '30000000-0000-0000-0000-000000000002',
@@ -130,8 +130,8 @@ values
     'manual',
     null,
     null,
-    date_trunc('day', now()) + interval '15 hours',
-    date_trunc('day', now()) + interval '15 hours 5 minutes'
+    now() - interval '20 hours',
+    now() - interval '19 hours 55 minutes'
   ),
   (
     '30000000-0000-0000-0000-000000000003',
@@ -143,11 +143,81 @@ values
     'voice',
     'I am doing okay this morning.',
     0.96,
-    date_trunc('day', now()) + interval '8 hours',
-    date_trunc('day', now()) + interval '8 hours 1 minute'
+    now() - interval '2 hours',
+    now() - interval '1 hour 59 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'sleep',
+    '{"quality": "slightly_restless", "wakeups": 2}'::jsonb,
+    'voice',
+    'Sleep was a little restless, but I am comfortable now.',
+    0.95,
+    now() - interval '1 day 9 hours',
+    now() - interval '1 day 8 hours 58 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000005',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000004',
+    'meal',
+    '{"meal": "breakfast", "intake": "normal"}'::jsonb,
+    'manual',
+    null,
+    null,
+    now() - interval '1 day 7 hours',
+    now() - interval '1 day 6 hours 55 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000006',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'meal',
+    '{"meal": "dinner", "intake": "normal"}'::jsonb,
+    'manual',
+    null,
+    null,
+    now() - interval '2 days 12 hours',
+    now() - interval '2 days 11 hours 55 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000007',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000003',
+    'check_in',
+    '{"mood": "good", "note": "Enjoyed the afternoon family call"}'::jsonb,
+    'manual',
+    null,
+    null,
+    now() - interval '3 days 4 hours',
+    now() - interval '3 days 3 hours 55 minutes'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000008',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000004',
+    'visit',
+    '{"visit_type": "home_nurse", "status": "completed", "note": "Routine visit completed"}'::jsonb,
+    'manual',
+    null,
+    null,
+    now() - interval '4 days 3 hours',
+    now() - interval '4 days 2 hours 55 minutes'
   )
 on conflict (id) do update set
+  reported_by = excluded.reported_by,
+  event_type = excluded.event_type,
   event_data = excluded.event_data,
+  source = excluded.source,
+  raw_transcript = excluded.raw_transcript,
+  confidence = excluded.confidence,
   occurred_at = excluded.occurred_at,
   created_at = excluded.created_at;
 
@@ -182,11 +252,58 @@ values
     '10000000-0000-0000-0000-000000000004',
     'pending',
     'medium',
-    date_trunc('day', now()) + interval '20 hours',
+    (
+      (now() at time zone 'Asia/Kolkata')::date + interval '20 hours'
+    ) at time zone 'Asia/Kolkata',
     null,
     null,
-    date_trunc('day', now()) + interval '9 hours 5 minutes',
-    date_trunc('day', now()) + interval '9 hours 5 minutes'
+    now() - interval '3 hours',
+    now() - interval '3 hours'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000001',
+    'Bring fruit for Amma',
+    'Bring the fruit Amma asked for during the family visit.',
+    '10000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000002',
+    'completed',
+    'low',
+    now() - interval '1 day',
+    now() - interval '1 day 1 hour',
+    null,
+    now() - interval '2 days',
+    now() - interval '1 day 1 hour'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000001',
+    'Call after lunch',
+    'Check in after lunch and share a short family update.',
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000003',
+    'completed',
+    'medium',
+    now() - interval '2 days',
+    now() - interval '2 days 1 hour',
+    null,
+    now() - interval '3 days',
+    now() - interval '2 days 1 hour'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000005',
+    '20000000-0000-0000-0000-000000000001',
+    'Prepare visit notes',
+    'Keep the next routine visit details together for Anu.',
+    '10000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000002',
+    'completed',
+    'low',
+    now() - interval '3 days',
+    now() - interval '3 days 30 minutes',
+    null,
+    now() - interval '4 days',
+    now() - interval '3 days 30 minutes'
   )
 on conflict (id) do update set
   title = excluded.title,
@@ -201,20 +318,37 @@ on conflict (id) do update set
 insert into public.scheduled_items (
   id, circle_id, created_by, title, starts_at, ends_at, recurrence_rule, created_at
 )
-values (
-  '50000000-0000-0000-0000-000000000001',
-  '20000000-0000-0000-0000-000000000001',
-  '10000000-0000-0000-0000-000000000002',
-  'Evening family call',
+values
   (
-    (now() at time zone 'Asia/Kolkata')::date + interval '1 day 19 hours'
-  ) at time zone 'Asia/Kolkata',
+    '50000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'Maya evening call',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 19 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 19 hours 30 minutes') at time zone 'Asia/Kolkata',
+    null,
+    now()
+  ),
   (
-    (now() at time zone 'Asia/Kolkata')::date + interval '1 day 19 hours 30 minutes'
-  ) at time zone 'Asia/Kolkata',
-  null,
-  date_trunc('day', now()) + interval '9 hours'
-)
+    '50000000-0000-0000-0000-000000000002',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'Anu home visit',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 10 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 11 hours') at time zone 'Asia/Kolkata',
+    null,
+    now()
+  ),
+  (
+    '50000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    'Usual medicine follow-up',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 20 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 20 hours 15 minutes') at time zone 'Asia/Kolkata',
+    null,
+    now()
+  )
 on conflict (id) do update set
   title = excluded.title,
   starts_at = excluded.starts_at,
@@ -224,17 +358,12 @@ insert into public.memories (
   id, circle_id, author_id, subject_id, kind, title, body,
   approximate_year, created_at
 )
-values (
-  '60000000-0000-0000-0000-000000000001',
-  '20000000-0000-0000-0000-000000000001',
-  '10000000-0000-0000-0000-000000000002',
-  '10000000-0000-0000-0000-000000000001',
-  'story',
-  'My first job',
-  'Amma remembers starting her first job around 1978.',
-  1978,
-  date_trunc('day', now()) - interval '2 days'
-)
+values
+  ('60000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'story', 'My first job', 'Amma remembers starting her first job in 1978 and the excitement of that first morning.', 1978, now() - interval '30 days'),
+  ('60000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'story', 'Our old family home', 'A warm memory of the old family home and its familiar evening routines.', 1985, now() - interval '24 days'),
+  ('60000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'story', 'Maya''s first day of school', 'Amma remembers checking Maya''s school bag twice before they walked out together.', 1994, now() - interval '18 days'),
+  ('60000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'story', 'Family trip to Munnar', 'Cool air, shared snacks, and an easy family day together in Munnar.', 2001, now() - interval '12 days'),
+  ('60000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'story', 'Rahul''s graduation day', 'The family gathered together and Amma remembers Rahul''s proud smile.', 2008, now() - interval '6 days')
 on conflict (id) do update set
   title = excluded.title,
   body = excluded.body,
@@ -243,18 +372,31 @@ on conflict (id) do update set
 insert into public.availability (
   id, circle_id, profile_id, starts_at, ends_at, note
 )
-values (
-  '70000000-0000-0000-0000-000000000001',
-  '20000000-0000-0000-0000-000000000001',
-  '10000000-0000-0000-0000-000000000003',
+values
   (
-    (now() at time zone 'Asia/Kolkata')::date + interval '1 day 13 hours'
-  ) at time zone 'Asia/Kolkata',
+    '70000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000003',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 13 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 17 hours') at time zone 'Asia/Kolkata',
+    'Available tomorrow afternoon'
+  ),
   (
-    (now() at time zone 'Asia/Kolkata')::date + interval '1 day 17 hours'
-  ) at time zone 'Asia/Kolkata',
-  'Available tomorrow afternoon'
-)
+    '70000000-0000-0000-0000-000000000002',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 18 hours') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 21 hours') at time zone 'Asia/Kolkata',
+    'Available for an evening call or visit'
+  ),
+  (
+    '70000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000004',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 9 hours 30 minutes') at time zone 'Asia/Kolkata',
+    ((now() at time zone 'Asia/Kolkata')::date + interval '1 day 12 hours') at time zone 'Asia/Kolkata',
+    'Planned home visit window'
+  )
 on conflict (id) do update set
   starts_at = excluded.starts_at,
   ends_at = excluded.ends_at,

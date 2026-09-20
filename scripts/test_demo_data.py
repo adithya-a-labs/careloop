@@ -36,6 +36,13 @@ def test_demo_dataset_has_expected_personas_and_counts() -> None:
     assert members[DEMO_ANU_ID]["role"] == "caregiver"
     anu = next(row for row in dataset.profiles if row["id"] == DEMO_ANU_ID)
     assert anu["preferences"]["memory_box_access"] is False
+    assert {row["approximate_year"] for row in dataset.memories} >= {
+        1978,
+        1985,
+        1994,
+        2001,
+        2008,
+    }
 
 
 def test_prescription_is_unassigned_and_covered_only_by_rahuls_window() -> None:

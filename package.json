@@ -12,10 +12,18 @@
     "test": "pnpm -r test",
     "format": "prettier --write .",
     "demo:seed": "python scripts/seed_demo.py",
-    "demo:reset": "python scripts/reset_demo.py"
+    "demo:reset": "python scripts/reset_demo.py",
+    "setup:supabase": "tsx scripts/setup-supabase.ts",
+    "verify:supabase": "tsx scripts/verify-supabase.ts",
+    "typecheck:supabase": "tsc -p scripts/tsconfig.json",
+    "test:supabase-tools": "tsx --test scripts/supabase-tools.test.ts"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "2.57.4",
+    "@types/node": "26.6.2",
     "prettier": "^3.4.2",
+    "supabase": "2.117.0",
+    "tsx": "4.23.13",
     "typescript": "^5.7.2"
   }
 }

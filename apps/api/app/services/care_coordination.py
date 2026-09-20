@@ -22,6 +22,7 @@ from app.services.errors import (
     BackendUnavailableError,
     ForbiddenError,
     InvalidOperationError,
+    MemoryAccessDeniedError,
     NotFoundError,
     UnauthorizedError,
 )
@@ -387,6 +388,35 @@ class CareCoordinationService:
                 "member_required",
                 "The referenced person must be an active member of this Care Circle.",
             )
+
+    def _assert_memory_access(self, circle_id: str, actor_id: str) -> None:
+        """Keep professional caregivers outside the private family MemoryBox."""
+
+        self._assert_member(circle_id, actor_id)
+        if self.uses_supabase:
+            rows = self._execute(
+                self._client()
+                .table("circle_members")
+                .select("role")
+                .eq("circle_id", circle_id)
+                .eq("profile_id", actor_id)
+                .eq("is_active", True)
+                .limit(1)
+            )
+            role = rows[0].get("role") if rows else None
+        else:
+            role = next(
+                (
+                    member["role"]
+                    for member in self._state["members"]
+                    if member["circle_id"] == circle_id
+                    and member["profile_id"] == actor_id
+                    and member["is_active"]
+                ),
+                None,
+            )
+        if role not in {"care_recipient", "patient", "family"}:
+            raise MemoryAccessDeniedError()
 
     def assert_voice_context(self, circle_id: str, actor_id: str, patient_id: str) -> None:
         """Authorize both the speaker and care subject before provider session creation."""
@@ -766,7 +796,7 @@ class CareCoordinationService:
         payload: MemoryCreate,
     ) -> dict[str, Any]:
         circle = str(circle_id)
-        self._assert_member(circle, actor_id)
+        self._assert_memory_access(circle, actor_id)
         self._assert_person_in_circle(circle, str(payload.subject_id))
         row = payload.model_dump(mode="json", exclude_none=True)
         row.update({"circle_id": circle, "author_id": actor_id})
@@ -795,7 +825,7 @@ class CareCoordinationService:
         offset: int,
     ) -> list[dict[str, Any]]:
         circle = str(circle_id)
-        self._assert_member(circle, actor_id)
+        self._assert_memory_access(circle, actor_id)
         if self.uses_supabase:
             return self._execute(
                 self._client()

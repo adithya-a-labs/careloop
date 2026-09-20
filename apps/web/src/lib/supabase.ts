@@ -2,7 +2,8 @@ import { createClient, type RealtimeChannel } from '@supabase/supabase-js';
 import type { DemoProfileId } from './mock-data';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const publishableKey =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Enable real mode whenever Supabase credentials are provided
 export const isRealMode = Boolean(supabaseUrl && publishableKey);

@@ -26,6 +26,14 @@ class ForbiddenError(ServiceError):
         super().__init__("circle_access_denied", message, 403)
 
 
+class MemoryAccessDeniedError(ForbiddenError):
+    def __init__(self) -> None:
+        super().__init__(
+            "MemoryBox is private to the care recipient and family members.",
+        )
+        self.code = "memory_access_denied"
+
+
 class NotFoundError(ServiceError):
     def __init__(self, resource: str) -> None:
         super().__init__("not_found", f"{resource} was not found.", 404)

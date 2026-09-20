@@ -63,6 +63,24 @@ An agent owns only the area named in its task. Cross-boundary work must be expli
 - Use the canonical design tokens; do not introduce violet or purple hues.
 - Preserve keyboard access, visible focus, semantic labels, readable contrast and comfortable touch targets.
 
+## Supabase setup
+
+CareLoop must work with any user-owned Supabase project. Never use or request the
+original developer's Supabase credentials.
+
+When setting up CareLoop:
+
+1. Read `docs/SUPABASE_SETUP.md` and `.env.example`.
+2. Inspect `supabase/migrations/`; migrations are authoritative.
+3. If a Supabase connector is available, use it only on the user's target project
+   to apply schema, RLS, functions and Realtime configuration.
+4. Run `pnpm setup:supabase`, then `pnpm verify:supabase`.
+5. Do not change application architecture to compensate for skipped migrations.
+
+The final synthetic demo state must include Amma, Maya, Rahul, Anu, realistic
+care history, the pending prescription task, Rahul availability, an upcoming Anu
+visit, private family MemoryBox data and Realtime task updates.
+
 ## Verification matrix
 
 Run the smallest relevant checks during development and the full affected set before handoff.
